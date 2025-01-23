@@ -1,88 +1,163 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Particle Physics</title>
-<link rel="stylesheet" href="./styles.css">
+    <title>Particle Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            user-select: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            background-color: #000;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            z-index: 10;
+        }
+        .controls label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .controls input[type="range"] {
+            width: 150px;
+        }
+        .controls select {
+            width: 150px;
+        }
+        .controls .info {
+            margin-top: 10px;
+        }
+        .controls button {
+            margin: 5px 0;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        .ui-hidden .controls {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+        .controls.hidden {
+            display: none;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .color-picker {
+            display: none;
+        }
+        .color-picker.visible {
+            display: block;
+        }
+        #requestMotionPermission {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 16px;
+            display: none;
+            z-index: 20;
+        }
+    </style>
 </head>
 <body>
-    <div class="ui">
-        <div id="fps">FPS: 0</div>
-        <div>Mode: <span id="currentMode">Normal</span></div>
-    </div>
-
-    <canvas id="canvas"></canvas>
-
+    <button id="requestMotionPermission">Request Motion Access</button>
     <div class="controls">
-        <div class="main-controls">
-            <div class="buttons">
-                <button class="btn" id="modeBtn">Mode (M)</button>
-                <button class="btn" id="resetBtn">Reset (R)</button>
-                <button class="btn" id="explodeBtn">Explode (E)</button>
-            </div>
-            <div class="sliders">
-                <div class="slider-container">
-                    <label>Particles: <span id="particleValue">100</span></label>
-                    <input type="range" id="particleSlider" min="10" max="1000" value="100" step="10">
-                </div>
-                <div class="slider-container">
-                    <label>Size: <span id="sizeValue">4-32</span></label>
-                    <input type="range" id="sizeSlider" min="2" max="64" value="32" step="2">
-                </div>
-                <div class="slider-container">
-                    <label>Speed: <span id="speedValue">0.5</span></label>
-                    <input type="range" id="speedSlider" min="0.1" max="2" value="0.5" step="0.1">
-                </div>
-                <div class="slider-container">
-                    <label>Gravity: <span id="gravityValue">0</span></label>
-                    <input type="range" id="gravitySlider" min="-2" max="2" value="0" step="0.1">
-                </div>
-                <div class="slider-container">
-                    <label>Wind: <span id="windValue">0</span></label>
-                    <input type="range" id="windSlider" min="-2" max="2" value="0" step="0.1">
-                </div>
-            </div>
+        <div class="control-group">
+            <label for="particleSlider">Particles: <span id="particleValue">100</span></label>
+            <input type="range" id="particleSlider" min="1" max="1000" value="100">
         </div>
-
-        <div class="options">
-            <select id="particleType" class="select-style">
-                <option value="circle">Circles</option>
-                <option value="square">Squares</option>
-                <option value="triangle">Triangles</option>
+        <div class="control-group">
+            <label for="sizeSlider">Size: <span id="sizeValue">4-32</span></label>
+            <input type="range" id="sizeSlider" min="4" max="128" value="32">
+        </div>
+        <div class="control-group">
+            <label for="sizeMode">Size Mode:</label>
+            <select id="sizeMode">
+                <option value="uniform">Uniform</option>
+                <option value="random">Random</option>
             </select>
-            <select id="sizeMode" class="select-style">
-                <option value="uniform">Uniform Size</option>
-                <option value="random">Random Size</option>
+        </div>
+        <div class="control-group">
+            <label for="speedSlider">Speed: <span id="speedValue">0.5</span></label>
+            <input type="range" id="speedSlider" min="0.1" max="2" step="0.1" value="0.5">
+        </div>
+        <div class="control-group">
+            <label for="gravitySlider">Gravity: <span id="gravityValue">0.0</span></label>
+            <input type="range" id="gravitySlider" min="-2" max="2" step="0.1" value="0">
+        </div>
+        <div class="control-group">
+            <label for="windSlider">Wind: <span id="windValue">0.0</span></label>
+            <input type="range" id="windSlider" min="-2" max="2" step="0.1" value="0">
+        </div>
+        <div class="control-group">
+            <label for="particleType">Particle Type:</label>
+            <select id="particleType">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+                <option value="triangle">Triangle</option>
             </select>
-            <select id="colorMode" class="select-style">
+        </div>
+        <div class="control-group">
+            <label for="colorMode">Color Mode:</label>
+            <select id="colorMode">
                 <option value="rainbow">Rainbow</option>
                 <option value="neon">Neon</option>
                 <option value="cool">Cool</option>
                 <option value="warm">Warm</option>
                 <option value="pastel">Pastel</option>
                 <option value="kinetic">Kinetic</option>
-                <option value="single">Single Color</option>
+                <option value="single">Single</option>
             </select>
-            <select id="physicsMode" class="select-style">
+        </div>
+        <div class="control-group color-picker" id="colorPicker">
+            <label for="colorWell">Color:</label>
+            <input type="color" id="colorWell" value="#00ff88">
+        </div>
+        <div class="control-group">
+            <label for="physicsMode">Mode: <span id="currentMode">Normal</span></label>
+            <select id="physicsMode">
                 <option value="normal">Normal</option>
                 <option value="vortex">Vortex</option>
                 <option value="attract">Attract</option>
                 <option value="repel">Repel</option>
                 <option value="fluid">Fluid</option>
+                <option value="springs">Springs</option>
             </select>
-            <input type="color" id="colorPicker" value="#00ff88" class="color-picker">
+        </div>
+        <div class="control-group">
+            <label for="sensorToggle">Use Device Motion</label>
+            <input type="checkbox" id="sensorToggle">
+        </div>
+        <div class="buttons">
+            <button id="resetBtn">Reset (R)</button>
+            <button id="explodeBtn">Explode (E)</button>
+            <button id="modeBtn">Cycle Mode (M)</button>
+            <button id="toggleUI">Toggle UI (H)</button>
+        </div>
+        <div class="info">
+            <span id="fps">FPS: 0</span>
         </div>
     </div>
 
-    <button id="toggleUI" class="toggle-ui" title="Toggle UI (H)">
-        <span class="icon">👁️</span>
-    </button>
-
-    <div class="keyboard-shortcuts">
-        Space: Pause | H: UI | R: Reset | M: Mode | E: Explode
-    </div>
-
+    <canvas id="canvas"></canvas>
     <script src="simulation.js"></script>
 </body>
 </html>
