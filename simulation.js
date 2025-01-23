@@ -483,17 +483,32 @@ class ParticleSystem {
 
     bindControls() {
         const particleSlider = document.getElementById('particleSlider');
-        particleSlider.addEventListener('input', (e) => {
-            const avgSize = (this.options.sizeRange[0] + this.options.sizeRange[1]) / 2;
-            const sizeMultiplier = Math.max(0.2, 16 / avgSize);
-            const adjustedMax = Math.floor(1000 * sizeMultiplier);
+        const particleValue = document.getElementById('particleValue');
+        const minParticles = 1;
+        const maxParticles = 1000;
+        const logMin = Math.log(minParticles);
+        const logMax = Math.log(maxParticles);
 
-            let count = parseInt(e.target.value);
-            count = Math.min(count, adjustedMax);
+        // Function to calculate particle count from slider value
+        function getParticleCount(sliderValue) {
+            const logValue = logMin + (sliderValue / 100) * (logMax - logMin);
+            return Math.round(Math.exp(logValue));
+        }
 
+        // Function to update particle count based on slider position
+        const updateParticleCount = (sliderValue) => {
+            const count = getParticleCount(sliderValue);
+            particleValue.textContent = count;
             this.options.particleCount = count;
-            document.getElementById('particleValue').textContent = count;
             this.createParticles();
+        }
+
+        // Initial update
+        updateParticleCount(particleSlider.value);
+
+        // Handle slider input
+        particleSlider.addEventListener('input', () => {
+            updateParticleCount(particleSlider.value);
         });
 
         const sizeSlider = document.getElementById('sizeSlider');
@@ -501,7 +516,7 @@ class ParticleSystem {
             const maxSize = parseInt(e.target.value);
             const minSize = Math.max(2, maxSize / 8);
             this.options.sizeRange = [minSize, maxSize];
-            document.getElementById('sizeValue').textContent = `${minSize.toFixed(1)}-${maxSize}`;
+            document.getElementById('sizeValue').textContent = `${minSize.toFixed(1)}-${maxSize.toFixed(1)}`;
 
             const avgSize = (minSize + maxSize) / 2;
             const sizeMultiplier = Math.max(0.2, 16 / avgSize);
@@ -651,7 +666,9 @@ class ParticleSystem {
     }
 }
 
-// Initialize
-const canvas = document.getElementById('canvas');
-const particleSystem = new ParticleSystem(canvas);
-particleSystem.update(0);
+// Initialize ParticleSystem after DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('canvas');
+    const particleSystem = new ParticleSystem(canvas);
+    particleSystem.update(0);
+});
