@@ -2,13 +2,13 @@ const utils = {
     lerp: (start, end, amt) => (1 - amt) * start + amt * end,
     clamp: (value, min, max) => Math.min(Math.max(value, min), max),
     randomRange: (min, max) => Math.random() * (max - min) + min,
-    distance: (x1, y1, x2, y2) => Math.sqrt((x2-x1)**2 + (y2-y1)**2),
-    
+    distance: (x1, y1, x2, y2) => Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2),
+
     getRandomColor: (mode = 'rainbow', singleColor = null) => {
         if (mode === 'single' && singleColor) {
             return singleColor;
         }
-        switch(mode) {
+        switch (mode) {
             case 'rainbow':
                 return `hsl(${Math.random() * 360}, 80%, 60%)`;
             case 'neon':
@@ -78,12 +78,12 @@ class Particle {
             this.options.color = utils.getKineticColor(speed, maxSpeed);
         }
     }
-	
-	update(gravityX, gravityY, deltaTime, mouseX, mouseY, particles = []) {
+
+    update(gravityX, gravityY, deltaTime, mouseX, mouseY, particles = []) {
         const dt = deltaTime * 0.001;
         const speed = this.options.speedMultiplier;
 
-        switch(this.options.mode) {
+        switch (this.options.mode) {
             case 'vortex':
                 const dx = mouseX - this.x;
                 const dy = mouseY - this.y;
@@ -187,11 +187,11 @@ class Particle {
             const dx = other.x - this.x;
             const dy = other.y - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
             // Adjust collision distance based on shape
             let thisRadius = this.options.size;
             let otherRadius = other.options.size;
-            
+
             if (this.options.type === 'square') thisRadius *= Math.SQRT2;
             if (other.options.type === 'square') otherRadius *= Math.SQRT2;
             if (this.options.type === 'triangle') thisRadius *= 1.5;
@@ -243,14 +243,14 @@ class Particle {
             }
         }
     }
-	
-	handleBoundaries() {
+
+    handleBoundaries() {
         let margin = this.options.size;
-        
+
         // Adjust margin based on shape
         if (this.options.type === 'square') margin *= Math.SQRT2;
         if (this.options.type === 'triangle') margin *= 1.5;
-        
+
         if (this.x < margin) {
             this.x = margin;
             this.velocityX *= -this.options.bounce;
@@ -278,8 +278,8 @@ class Particle {
         ctx.fillStyle = this.options.color;
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
-        
-        switch(this.options.type) {
+
+        switch (this.options.type) {
             case 'circle':
                 ctx.beginPath();
                 ctx.arc(0, 0, this.options.size, 0, Math.PI * 2);
@@ -288,8 +288,8 @@ class Particle {
             case 'triangle':
                 ctx.beginPath();
                 const size = this.options.size * 1.5;
-                ctx.moveTo(-size, size/2);
-                ctx.lineTo(size, size/2);
+                ctx.moveTo(-size, size / 2);
+                ctx.lineTo(size, size / 2);
                 ctx.lineTo(0, -size);
                 ctx.closePath();
                 ctx.fill();
@@ -302,7 +302,7 @@ class Particle {
                     this.options.size * 2
                 );
         }
-        
+
         ctx.restore();
     }
 }
@@ -321,7 +321,11 @@ class ParticleSystem {
         this.frameCount = 0;
         this.fps = 0;
         this.isRunning = true;
-        
+
+        this.useSensor = false; // Flag to indicate if sensor input is enabled
+        this.sensorGravityX = 0;
+        this.sensorGravityY = 0;
+
         this.options = {
             particleCount: 100,
             colorMode: 'rainbow',
@@ -351,10 +355,10 @@ class ParticleSystem {
     createParticles() {
         this.particles = [];
         for (let i = 0; i < this.options.particleCount; i++) {
-            const size = this.options.sizeMode === 'uniform' 
-                ? this.options.sizeRange[1] 
+            const size = this.options.sizeMode === 'uniform'
+                ? this.options.sizeRange[1]
                 : utils.randomRange(...this.options.sizeRange);
-                
+
             this.particles.push(new Particle(this.canvas, {
                 size: size,
                 colorMode: this.options.colorMode,
@@ -379,10 +383,10 @@ class ParticleSystem {
             }
         });
     }
-	
-	bindEvents() {
+
+    bindEvents() {
         window.addEventListener('resize', () => this.resize());
-        
+
         const moveHandler = (x, y) => {
             this.mouseX = x;
             this.mouseY = y;
@@ -403,7 +407,7 @@ class ParticleSystem {
         }, { passive: false });
 
         document.addEventListener('keydown', (e) => {
-            switch(e.key.toLowerCase()) {
+            switch (e.key.toLowerCase()) {
                 case 'h':
                     this.toggleUI();
                     break;
@@ -426,6 +430,55 @@ class ParticleSystem {
                     break;
             }
         });
+
+        // Device Motion Event (for gravity)
+        if (window.DeviceMotionEvent) {
+            const permissionBtn = document.getElementById('requestMotionPermission');
+
+            const handleDeviceMotion = (event) => {
+                // Only use sensor values if the toggle is checked
+                if (this.useSensor) {
+                    // Adjust sensitivity and direction as needed
+                    this.sensorGravityX = -event.accelerationIncludingGravity.x * 0.2;
+                    this.sensorGravityY = event.accelerationIncludingGravity.y * 0.2;
+                }
+            };
+
+            const addDeviceMotionListener = () => {
+                window.addEventListener('devicemotion', handleDeviceMotion);
+                permissionBtn.style.display = 'none'; // Hide button after permission is granted
+            };
+
+            // For iOS 13+, request permission
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                permissionBtn.style.display = 'block';
+                permissionBtn.addEventListener('click', () => {
+                    DeviceMotionEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                addDeviceMotionListener();
+                            } else {
+                                console.warn('Device Motion permission denied.');
+                            }
+                        })
+                        .catch(console.error);
+                });
+            } else {
+                // For older devices, just add the listener directly
+                addDeviceMotionListener();
+            }
+        }
+
+        // Toggle Sensor Input
+        const sensorToggle = document.getElementById('sensorToggle');
+        sensorToggle.addEventListener('change', () => {
+            this.useSensor = sensorToggle.checked;
+            if (!this.useSensor) {
+                // Reset sensor gravity values when turning off
+                this.sensorGravityX = 0;
+                this.sensorGravityY = 0;
+            }
+        });
     }
 
     bindControls() {
@@ -434,10 +487,10 @@ class ParticleSystem {
             const avgSize = (this.options.sizeRange[0] + this.options.sizeRange[1]) / 2;
             const sizeMultiplier = Math.max(0.2, 16 / avgSize);
             const adjustedMax = Math.floor(1000 * sizeMultiplier);
-            
+
             let count = parseInt(e.target.value);
             count = Math.min(count, adjustedMax);
-            
+
             this.options.particleCount = count;
             document.getElementById('particleValue').textContent = count;
             this.createParticles();
@@ -449,17 +502,17 @@ class ParticleSystem {
             const minSize = Math.max(2, maxSize / 8);
             this.options.sizeRange = [minSize, maxSize];
             document.getElementById('sizeValue').textContent = `${minSize.toFixed(1)}-${maxSize}`;
-            
+
             const avgSize = (minSize + maxSize) / 2;
             const sizeMultiplier = Math.max(0.2, 16 / avgSize);
             const adjustedMax = Math.floor(1000 * sizeMultiplier);
-            
+
             if (this.options.particleCount > adjustedMax) {
                 this.options.particleCount = adjustedMax;
                 document.getElementById('particleValue').textContent = adjustedMax;
                 particleSlider.value = adjustedMax;
             }
-            
+
             this.createParticles();
         });
 
@@ -472,7 +525,7 @@ class ParticleSystem {
         const speedSlider = document.getElementById('speedSlider');
         speedSlider.addEventListener('input', (e) => {
             this.options.speedMultiplier = parseFloat(e.target.value);
-            document.getElementById('speedValue').textContent = 
+            document.getElementById('speedValue').textContent =
                 this.options.speedMultiplier.toFixed(1);
             this.particles.forEach(p => {
                 p.options.speedMultiplier = this.options.speedMultiplier;
@@ -482,14 +535,14 @@ class ParticleSystem {
         const gravitySlider = document.getElementById('gravitySlider');
         gravitySlider.addEventListener('input', (e) => {
             this.options.gravity = parseFloat(e.target.value);
-            document.getElementById('gravityValue').textContent = 
+            document.getElementById('gravityValue').textContent =
                 this.options.gravity.toFixed(1);
         });
 
         const windSlider = document.getElementById('windSlider');
         windSlider.addEventListener('input', (e) => {
             this.options.windForce = parseFloat(e.target.value);
-            document.getElementById('windValue').textContent = 
+            document.getElementById('windValue').textContent =
                 this.options.windForce.toFixed(1);
         });
 
@@ -503,14 +556,14 @@ class ParticleSystem {
 
         const colorMode = document.getElementById('colorMode');
         const colorPicker = document.getElementById('colorPicker');
-        
+
         colorMode.addEventListener('change', (e) => {
             this.options.colorMode = e.target.value;
             colorPicker.style.display = e.target.value === 'single' ? 'block' : 'none';
             this.particles.forEach(p => {
                 p.options.colorMode = e.target.value;
-                p.options.color = e.target.value === 'single' 
-                    ? this.options.singleColor 
+                p.options.color = e.target.value === 'single'
+                    ? this.options.singleColor
                     : utils.getRandomColor(e.target.value);
             });
         });
@@ -527,7 +580,7 @@ class ParticleSystem {
         const physicsMode = document.getElementById('physicsMode');
         physicsMode.addEventListener('change', (e) => {
             this.options.physicsMode = e.target.value;
-            document.getElementById('currentMode').textContent = 
+            document.getElementById('currentMode').textContent =
                 e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
             this.particles.forEach(p => {
                 p.options.mode = e.target.value;
@@ -563,7 +616,7 @@ class ParticleSystem {
 
     update(timestamp) {
         if (!this.isRunning) return;
-        
+
         const deltaTime = timestamp - this.lastTime;
         this.lastTime = timestamp;
 
@@ -574,10 +627,10 @@ class ParticleSystem {
 
         this.particles.forEach(particle => {
             particle.update(
-                this.gravityX + this.options.windForce, 
-                this.gravityY + this.options.gravity,
-                deltaTime, 
-                this.mouseX, 
+                this.gravityX + this.options.windForce + this.sensorGravityX, // Add sensor input
+                this.gravityY + this.options.gravity + this.sensorGravityY, // Add sensor input
+                deltaTime,
+                this.mouseX,
                 this.mouseY,
                 this.particles
             );
