@@ -42,24 +42,28 @@ const utils = {
     }
 };
 
+// Particle Class with Optimizations
 class Particle {
     constructor(canvas, options = {}) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        // Cache options
         this.options = {
+            ...options, // Consider spreading defaults if you have any
             size: options.size || utils.randomRange(4, 32),
-            color: options.color || utils.getRandomColor(options.colorMode, options.singleColor),
             friction: 0.97,
             bounce: 0.85,
             mode: options.mode || 'normal',
             type: options.type || 'circle',
             speedMultiplier: options.speedMultiplier || 0.5,
             colorMode: options.colorMode || 'rainbow',
-            singleColor: options.singleColor
+            singleColor: options.singleColor,
         };
+        this.color = options.color || utils.getRandomColor(this.options.colorMode, this.options.singleColor);
         this.mass = this.options.size * 0.1;
         this.rotation = 0;
         this.rotationSpeed = utils.randomRange(-0.02, 0.02) * this.options.speedMultiplier;
+        this.colorUpdateCounter = 0; // for kinetic color update
         this.reset();
     }
 
@@ -69,27 +73,35 @@ class Particle {
         this.velocityX = utils.randomRange(-2, 2) * this.options.speedMultiplier;
         this.velocityY = utils.randomRange(-2, 2) * this.options.speedMultiplier;
         this.rotation = utils.randomRange(0, Math.PI * 2);
+        //Reset pooled properties if needed
     }
 
     updateColor() {
         if (this.options.colorMode === 'kinetic') {
-            const speed = Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY);
-            const maxSpeed = 15 * this.options.speedMultiplier;
-            this.options.color = utils.getKineticColor(speed, maxSpeed);
+            this.colorUpdateCounter++;
+            if (this.colorUpdateCounter >= 5) { // Update color every 5 frames
+                const speedSq = this.velocityX * this.velocityX + this.velocityY * this.velocityY;
+                const maxSpeed = 15 * this.options.speedMultiplier;
+                const maxSpeedSq = maxSpeed * maxSpeed;
+                this.color = utils.getKineticColor(Math.sqrt(speedSq), Math.sqrt(maxSpeedSq));
+                this.colorUpdateCounter = 0;
+            }
         }
     }
 
     update(gravityX, gravityY, deltaTime, mouseX, mouseY, particles = []) {
         const dt = deltaTime * 0.001;
-        const speed = this.options.speedMultiplier;
+        // Cache frequently accessed options
+        const options = this.options;
+        const speed = options.speedMultiplier;
 
-        switch (this.options.mode) {
+        switch (options.mode) {
             case 'vortex':
                 const dx = mouseX - this.x;
                 const dy = mouseY - this.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < 150) {
-                    const force = (150 - dist) / 150;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < 22500) { // 150 * 150 = 22500
+                    const force = (150 - Math.sqrt(distSq)) / 150;
                     this.velocityX += dy * force * 0.05 * speed;
                     this.velocityY -= dx * force * 0.05 * speed;
                 }
@@ -98,9 +110,9 @@ class Particle {
             case 'attract':
                 const ax = mouseX - this.x;
                 const ay = mouseY - this.y;
-                const aDist = Math.sqrt(ax * ax + ay * ay);
-                if (aDist < 200) {
-                    const force = (200 - aDist) / 200;
+                const aDistSq = ax * ax + ay * ay;
+                if (aDistSq < 40000) { // 200 * 200 = 40000
+                    const force = (200 - Math.sqrt(aDistSq)) / 200;
                     this.velocityX += ax * force * 0.02 * speed;
                     this.velocityY += ay * force * 0.02 * speed;
                 }
@@ -109,9 +121,9 @@ class Particle {
             case 'repel':
                 const rx = this.x - mouseX;
                 const ry = this.y - mouseY;
-                const rDist = Math.sqrt(rx * rx + ry * ry);
-                if (rDist < 150) {
-                    const force = (150 - rDist) / 150;
+                const rDistSq = rx * rx + ry * ry;
+                if (rDistSq < 22500) { // 150 * 150 = 22500
+                    const force = (150 - Math.sqrt(rDistSq)) / 150;
                     this.velocityX += rx * force * 0.05 * speed;
                     this.velocityY += ry * force * 0.05 * speed;
                 }
@@ -122,11 +134,13 @@ class Particle {
                     if (other === this) continue;
                     const fx = other.x - this.x;
                     const fy = other.y - this.y;
-                    const fDist = Math.sqrt(fx * fx + fy * fy);
-                    if (fDist < 50 && fDist > 0) {
-                        const force = (1 - fDist / 50) * speed;
-                        this.velocityX += (fx / fDist) * force * 0.2;
-                        this.velocityY += (fy / fDist) * force * 0.2;
+                    const fDistSq = fx * fx + fy * fy;
+                    if (fDistSq < 2500 && fDistSq > 0) { // 50 * 50 = 2500
+                        const dist = Math.sqrt(fDistSq);
+                        const force = (1 - dist / 50) * speed;
+                        const invDist = 1 / dist; // Calculate inverse once
+                        this.velocityX += (fx * invDist) * force * 0.2;
+                        this.velocityY += (fy * invDist) * force * 0.2;
                     }
                 }
                 break;
@@ -136,11 +150,13 @@ class Particle {
                     if (other === this) continue;
                     const sx = other.x - this.x;
                     const sy = other.y - this.y;
-                    const sDist = Math.sqrt(sx * sx + sy * sy);
-                    if (sDist < 50 && sDist > 0) {
-                        const force = (sDist - 25) * 0.03 * speed;
-                        this.velocityX += (sx / sDist) * force;
-                        this.velocityY += (sy / sDist) * force;
+                    const sDistSq = sx * sx + sy * sy;
+                    if (sDistSq < 2500 && sDistSq > 0) { // 50 * 50 = 2500
+                        const dist = Math.sqrt(sDistSq);
+                        const force = (dist - 25) * 0.03 * speed;
+                        const invDist = 1 / dist; // Calculate inverse once
+                        this.velocityX += (sx * invDist) * force;
+                        this.velocityY += (sy * invDist) * force;
                     }
                 }
                 break;
@@ -151,14 +167,15 @@ class Particle {
         }
 
         // Apply physics
-        this.velocityX *= this.options.friction;
-        this.velocityY *= this.options.friction;
+        this.velocityX *= options.friction;
+        this.velocityY *= options.friction;
 
-        // Limit speed
-        const currentSpeed = Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY);
+        // Limit speed using squared speed
+        const currentSpeedSq = this.velocityX * this.velocityX + this.velocityY * this.velocityY;
         const maxSpeed = 15 * speed;
-        if (currentSpeed > maxSpeed) {
-            const ratio = maxSpeed / currentSpeed;
+        const maxSpeedSq = maxSpeed * maxSpeed;
+        if (currentSpeedSq > maxSpeedSq) {
+            const ratio = maxSpeed / Math.sqrt(currentSpeedSq);
             this.velocityX *= ratio;
             this.velocityY *= ratio;
         }
@@ -168,7 +185,7 @@ class Particle {
         this.y += this.velocityY;
 
         // Update rotation for non-circular shapes
-        if (this.options.type !== 'circle') {
+        if (options.type !== 'circle') {
             this.rotation += this.rotationSpeed;
         }
 
@@ -181,12 +198,13 @@ class Particle {
     }
 
     handleCollisions(particles) {
+        // Iterate through particles (spatial partitioning would be implemented here)
         for (let other of particles) {
             if (other === this) continue;
 
             const dx = other.x - this.x;
             const dy = other.y - this.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            const distSq = dx * dx + dy * dy;
 
             // Adjust collision distance based on shape
             let thisRadius = this.options.size;
@@ -198,10 +216,13 @@ class Particle {
             if (other.options.type === 'triangle') otherRadius *= 1.5;
 
             const minDistance = thisRadius + otherRadius;
+            const minDistanceSq = minDistance * minDistance;
 
-            if (distance < minDistance && distance > 0) {
+            if (distSq < minDistanceSq && distSq > 0) {
+                const distance = Math.sqrt(distSq);
                 // Calculate collision response
                 const angle = Math.atan2(dy, dx);
+                // Cache sin and cos
                 const sin = Math.sin(angle);
                 const cos = Math.cos(angle);
 
@@ -274,8 +295,8 @@ class Particle {
 
     draw() {
         const { ctx } = this;
+        ctx.fillStyle = this.color; // Use the potentially updated color
         ctx.save();
-        ctx.fillStyle = this.options.color;
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
 
@@ -307,6 +328,7 @@ class Particle {
     }
 }
 
+// Particle System with Optimizations
 class ParticleSystem {
     constructor(canvas) {
         this.canvas = canvas;
@@ -322,13 +344,14 @@ class ParticleSystem {
         this.fps = 0;
         this.isRunning = true;
 
-        this.useSensor = false; // Flag to indicate if sensor input is enabled
+        this.useSensor = true;
         this.sensorGravityX = 0;
         this.sensorGravityY = 0;
 
+        // Default options
         this.options = {
             particleCount: 100,
-            colorMode: 'rainbow',
+            colorMode: 'kinetic', // Default to kinetic mode
             singleColor: '#00ff88',
             particleType: 'circle',
             physicsMode: 'normal',
@@ -340,6 +363,20 @@ class ParticleSystem {
             explosionForce: 5.0
         };
 
+        // Spatial Partitioning (Grid-based example)
+        this.gridSize = 100; // Adjust as needed
+        this.grid = [];
+
+        // Particle Pool
+        this.particlePool = [];
+
+        // Cache canvas dimensions
+        this.canvasWidth = canvas.width;
+        this.canvasHeight = canvas.height;
+
+        // Dirty rectangles for drawing optimization
+        this.dirtyRects = [];
+
         this.init();
         this.bindEvents();
         this.bindControls();
@@ -349,34 +386,96 @@ class ParticleSystem {
         this.resize();
         this.createParticles();
         this.ctx.fillStyle = '#000000';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
     }
 
     createParticles() {
         this.particles = [];
-        for (let i = 0; i < this.options.particleCount; i++) {
-            const size = this.options.sizeMode === 'uniform'
-                ? this.options.sizeRange[1]
-                : utils.randomRange(...this.options.sizeRange);
+        const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier } = this.options
+        for (let i = 0; i < particleCount; i++) {
+            const size = sizeMode === 'uniform'
+                ? sizeRange[1]
+                : utils.randomRange(...sizeRange);
+            // Get from pool if available, otherwise create new
+            let particle;
+            if (this.particlePool.length > 0) {
+                particle = this.particlePool.pop();
+                particle.options = {
+                    ...particle.options,
+                    size,
+                    colorMode,
+                    singleColor,
+                    type: particleType,
+                    mode: physicsMode,
+                    speedMultiplier
+                }
+                particle.color = particle.options.color || utils.getRandomColor(particle.options.colorMode, particle.options.singleColor);
+                particle.mass = particle.options.size * 0.1;
+                particle.reset();
+            } else {
+                particle = new Particle(this.canvas, {
+                    size,
+                    colorMode,
+                    singleColor,
+                    type: particleType,
+                    mode: physicsMode,
+                    speedMultiplier
+                });
+            }
+            this.particles.push(particle);
+        }
+        // Rebuild spatial grid after creating particles
+        this.buildSpatialGrid();
+    }
 
-            this.particles.push(new Particle(this.canvas, {
-                size: size,
-                colorMode: this.options.colorMode,
-                singleColor: this.options.singleColor,
-                type: this.options.particleType,
-                mode: this.options.physicsMode,
-                speedMultiplier: this.options.speedMultiplier
-            }));
+    // Build Spatial Grid (for collision optimization)
+    buildSpatialGrid() {
+        const { canvasWidth, canvasHeight, gridSize } = this;
+        const cols = Math.ceil(canvasWidth / gridSize);
+        const rows = Math.ceil(canvasHeight / gridSize);
+
+        this.grid = [];
+        for (let i = 0; i < rows; i++) {
+            this.grid[i] = [];
+            for (let j = 0; j < cols; j++) {
+                this.grid[i][j] = [];
+            }
+        }
+
+        for (let particle of this.particles) {
+            const cellX = Math.floor(particle.x / gridSize);
+            const cellY = Math.floor(particle.y / gridSize);
+            if (this.grid[cellY] && this.grid[cellY][cellX])
+                this.grid[cellY][cellX].push(particle);
         }
     }
 
+    // Get particles in nearby cells for collision detection
+    getNearbyParticles(particle) {
+        const { gridSize } = this;
+        const cellX = Math.floor(particle.x / gridSize);
+        const cellY = Math.floor(particle.y / gridSize);
+
+        const nearbyParticles = [];
+        for (let i = cellY - 1; i <= cellY + 1; i++) {
+            for (let j = cellX - 1; j <= cellX + 1; j++) {
+                if (this.grid[i] && this.grid[i][j]) {
+                    nearbyParticles.push(...this.grid[i][j]);
+                }
+            }
+        }
+
+        return nearbyParticles;
+    }
+
     explodeAtPoint(x, y, radius = 200) {
+        const radiusSq = radius * radius;
         this.particles.forEach(particle => {
             const dx = particle.x - x;
             const dy = particle.y - y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < radius) {
-                const force = (1 - distance / radius) * this.options.explosionForce;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq < radiusSq) {
+                const force = (1 - Math.sqrt(distanceSq) / radius) * this.options.explosionForce;
                 const angle = Math.atan2(dy, dx);
                 particle.velocityX += Math.cos(angle) * force * 20 + utils.randomRange(-1, 1);
                 particle.velocityY += Math.sin(angle) * force * 20 + utils.randomRange(-1, 1);
@@ -390,8 +489,8 @@ class ParticleSystem {
         const moveHandler = (x, y) => {
             this.mouseX = x;
             this.mouseY = y;
-            const centerX = this.canvas.width / 2;
-            const centerY = this.canvas.height / 2;
+            const centerX = this.canvasWidth / 2;
+            const centerY = this.canvasHeight / 2;
             this.gravityX = (x - centerX) * 0.005;
             this.gravityY = (y - centerY) * 0.005;
         };
@@ -434,6 +533,8 @@ class ParticleSystem {
         // Device Motion Event (for gravity)
         if (window.DeviceMotionEvent) {
             const permissionBtn = document.getElementById('requestMotionPermission');
+            const sensorToggle = document.getElementById('sensorToggle');
+            sensorToggle.checked = true;
 
             const handleDeviceMotion = (event) => {
                 // Only use sensor values if the toggle is checked
@@ -572,12 +673,15 @@ class ParticleSystem {
         const colorMode = document.getElementById('colorMode');
         const colorPicker = document.getElementById('colorPicker');
 
+        // Set default selected option for colorMode
+        colorMode.value = 'kinetic';
+
         colorMode.addEventListener('change', (e) => {
             this.options.colorMode = e.target.value;
             colorPicker.style.display = e.target.value === 'single' ? 'block' : 'none';
             this.particles.forEach(p => {
                 p.options.colorMode = e.target.value;
-                p.options.color = e.target.value === 'single'
+                p.color = e.target.value === 'single'
                     ? this.options.singleColor
                     : utils.getRandomColor(e.target.value);
             });
@@ -587,7 +691,7 @@ class ParticleSystem {
             this.options.singleColor = e.target.value;
             if (this.options.colorMode === 'single') {
                 this.particles.forEach(p => {
-                    p.options.color = e.target.value;
+                    p.color = e.target.value;
                 });
             }
         });
@@ -617,13 +721,21 @@ class ParticleSystem {
     resize() {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
+        // Update cached dimensions
+        this.canvasWidth = this.canvas.width;
+        this.canvasHeight = this.canvas.height;
+        // Rebuild spatial grid after resizing
+        this.buildSpatialGrid();
     }
 
     updateFPS(timestamp) {
         this.frameCount++;
         if (timestamp - this.fpsTime >= 1000) {
             this.fps = this.frameCount;
-            document.getElementById('fps').textContent = `FPS: ${this.fps}`;
+            // Limit DOM updates for FPS counter
+            if (this.fps % 5 === 0) { // Update every 5 frames
+                document.getElementById('fps').textContent = `FPS: ${this.fps}`;
+            }
             this.frameCount = 0;
             this.fpsTime = timestamp;
         }
@@ -637,28 +749,61 @@ class ParticleSystem {
 
         this.updateFPS(timestamp);
 
-        this.ctx.fillStyle = '#000000';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        // Clear dirty rectangles or full canvas
+        if (this.dirtyRects.length > 0) {
+            this.dirtyRects.forEach(rect => {
+                this.ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
+            });
+            this.dirtyRects = [];
+        } else {
+            this.ctx.fillStyle = '#000000';
+            this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+        }
 
         this.particles.forEach(particle => {
+            // Add to dirty rects for partial redrawing
+            this.dirtyRects.push({
+                x: Math.floor(particle.x - particle.options.size * 2),
+                y: Math.floor(particle.y - particle.options.size * 2),
+                width: Math.ceil(particle.options.size * 4),
+                height: Math.ceil(particle.options.size * 4)
+            });
+            // Spatial Partitioning: Get nearby particles instead of all particles
+            const nearbyParticles = this.getNearbyParticles(particle);
             particle.update(
-                this.gravityX + this.options.windForce + this.sensorGravityX, // Add sensor input
-                this.gravityY + this.options.gravity + this.sensorGravityY, // Add sensor input
+                this.gravityX + this.options.windForce + this.sensorGravityX,
+                this.gravityY + this.options.gravity + this.sensorGravityY,
                 deltaTime,
                 this.mouseX,
                 this.mouseY,
-                this.particles
+                nearbyParticles // Pass nearby particles only
             );
+            // Add to dirty rects for partial redrawing
+            this.dirtyRects.push({
+                x: Math.floor(particle.x - particle.options.size * 2),
+                y: Math.floor(particle.y - particle.options.size * 2),
+                width: Math.ceil(particle.options.size * 4),
+                height: Math.ceil(particle.options.size * 4)
+            });
+
             particle.draw();
         });
+
+        // Rebuild spatial grid every frame (could be optimized further)
+        this.buildSpatialGrid();
 
         requestAnimationFrame((t) => this.update(t));
     }
 
     reset() {
         this.ctx.fillStyle = '#000000';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.particles.forEach(particle => particle.reset());
+        this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+        // Return particles to the pool instead of destroying
+        this.particles.forEach(particle => {
+            this.particlePool.push(particle);
+        });
+        this.particles = [];
+        this.createParticles();
     }
 
     toggleUI() {
