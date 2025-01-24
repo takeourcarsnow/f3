@@ -1,44 +1,46 @@
+// --- START OF FILE simulation.js ---
+
+// Optimized Utilities
 const utils = {
     lerp: (start, end, amt) => (1 - amt) * start + amt * end,
-    clamp: (value, min, max) => Math.min(Math.max(value, min), max),
+    clamp: (value, min, max) => Math.max(min, Math.min(value, max)),
     randomRange: (min, max) => Math.random() * (max - min) + min,
-    distance: (x1, y1, x2, y2) => Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2),
+    // Optimized distance calculation
+    distance: (x1, y1, x2, y2) => {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        return Math.sqrt(dx * dx + dy * dy);
+    },
 
     getRandomColor: (mode = 'rainbow', singleColor = null) => {
-        if (mode === 'single' && singleColor) {
-            return singleColor;
-        }
+        if (mode === 'single' && singleColor) return singleColor;
+
+        // Pre-calculate and store HSL values for color modes
         switch (mode) {
             case 'rainbow':
-                return `hsl(${Math.random() * 360}, 80%, 60%)`;
+                return `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`;
             case 'neon':
                 const neonColors = [
-                    '#ff0088', // hot pink
-                    '#00ff99', // bright green
-                    '#00ffff', // cyan
-                    '#ff9900', // orange
-                    '#ff00ff', // magenta
-                    '#ffff00'  // yellow
+                    '#ff0088', '#00ff99', '#00ffff', '#ff9900', '#ff00ff', '#ffff00'
                 ];
                 return neonColors[Math.floor(Math.random() * neonColors.length)];
             case 'cool':
-                return `hsl(${utils.randomRange(180, 300)}, 70%, 60%)`; // blues and purples
+                return `hsl(${Math.floor(utils.randomRange(180, 300))}, 70%, 60%)`;
             case 'warm':
-                return `hsl(${utils.randomRange(0, 60)}, 80%, 60%)`; // reds and yellows
+                return `hsl(${Math.floor(utils.randomRange(0, 60))}, 80%, 60%)`;
             case 'pastel':
-                return `hsl(${Math.random() * 360}, 70%, 80%)`; // lighter, softer colors
+                return `hsl(${Math.floor(Math.random() * 360)}, 70%, 80%)`;
             case 'kinetic':
-                return `hsl(0, 80%, 60%)`; // starting color, will be modified by speed
+                return `hsl(0, 80%, 60%)`; // Base color, modified by speed
             default:
-                return `hsl(${Math.random() * 360}, 70%, 60%)`;
+                return `hsl(${Math.floor(Math.random() * 360)}, 70%, 60%)`;
         }
     },
 
     getKineticColor: (speed, maxSpeed) => {
-        const hue = (speed / maxSpeed) * 240;
-        const saturation = 80;
-        const lightness = 60;
-        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        // Optimize hue calculation
+        const hue = Math.floor((speed / maxSpeed) * 240);
+        return `hsl(${hue}, 80%, 60%)`;
     }
 };
 
@@ -47,132 +49,139 @@ class Particle {
     constructor(canvas, options = {}) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        // Cache options
+
+        // Default options (spread into options to reduce lookups)
         this.options = {
-            ...options, // Consider spreading defaults if you have any
-            size: options.size || utils.randomRange(4, 32),
+            size: utils.randomRange(4, 32),
             friction: 0.97,
             bounce: 0.85,
-            mode: options.mode || 'normal',
-            type: options.type || 'circle',
-            speedMultiplier: options.speedMultiplier || 0.5,
-            colorMode: options.colorMode || 'rainbow',
-            singleColor: options.singleColor,
+            mode: 'normal',
+            type: 'circle',
+            speedMultiplier: 0.5,
+            colorMode: 'rainbow',
+            singleColor: null,
+            ...options,
         };
-        this.color = options.color || utils.getRandomColor(this.options.colorMode, this.options.singleColor);
+
+        this.color = this.options.color || utils.getRandomColor(this.options.colorMode, this.options.singleColor);
         this.mass = this.options.size * 0.1;
         this.rotation = 0;
         this.rotationSpeed = utils.randomRange(-0.02, 0.02) * this.options.speedMultiplier;
-        this.colorUpdateCounter = 0; // for kinetic color update
+        this.colorUpdateCounter = 0;
+        this.maxSpeed = 15 * this.options.speedMultiplier; // Pre-calculate maxSpeed
+
+        // Poolable properties (initialized in reset)
+        this.x = 0;
+        this.y = 0;
+        this.velocityX = 0;
+        this.velocityY = 0;
+
         this.reset();
     }
 
     reset() {
-        this.x = utils.randomRange(0, this.canvas.width);
-        this.y = utils.randomRange(0, this.canvas.height);
-        this.velocityX = utils.randomRange(-2, 2) * this.options.speedMultiplier;
-        this.velocityY = utils.randomRange(-2, 2) * this.options.speedMultiplier;
+        const { canvas, options } = this;
+        this.x = utils.randomRange(0, canvas.width);
+        this.y = utils.randomRange(0, canvas.height);
+        this.velocityX = utils.randomRange(-2, 2) * options.speedMultiplier;
+        this.velocityY = utils.randomRange(-2, 2) * options.speedMultiplier;
         this.rotation = utils.randomRange(0, Math.PI * 2);
-        //Reset pooled properties if needed
     }
 
     updateColor() {
-        if (this.options.colorMode === 'kinetic') {
-            this.colorUpdateCounter++;
-            if (this.colorUpdateCounter >= 5) { // Update color every 5 frames
-                const speedSq = this.velocityX * this.velocityX + this.velocityY * this.velocityY;
-                const maxSpeed = 15 * this.options.speedMultiplier;
-                const maxSpeedSq = maxSpeed * maxSpeed;
-                this.color = utils.getKineticColor(Math.sqrt(speedSq), Math.sqrt(maxSpeedSq));
-                this.colorUpdateCounter = 0;
-            }
-        }
+        if (this.options.colorMode !== 'kinetic') return;
+
+        this.colorUpdateCounter++;
+        if (this.colorUpdateCounter < 5) return; // Update color every 5 frames
+
+        // Optimized speed calculation
+        const speedSq = this.velocityX * this.velocityX + this.velocityY * this.velocityY;
+        this.color = utils.getKineticColor(Math.sqrt(speedSq), this.maxSpeed);
+        this.colorUpdateCounter = 0;
     }
 
-    update(gravityX, gravityY, deltaTime, mouseX, mouseY, particles = []) {
+    update(gravityX, gravityY, deltaTime, mouseX, mouseY, nearbyParticles = []) {
         const dt = deltaTime * 0.001;
-        // Cache frequently accessed options
-        const options = this.options;
-        const speed = options.speedMultiplier;
+        const { options, maxSpeed } = this;
 
+        // Interaction modes
         switch (options.mode) {
             case 'vortex':
-                const dx = mouseX - this.x;
-                const dy = mouseY - this.y;
-                const distSq = dx * dx + dy * dy;
-                if (distSq < 22500) { // 150 * 150 = 22500
-                    const force = (150 - Math.sqrt(distSq)) / 150;
-                    this.velocityX += dy * force * 0.05 * speed;
-                    this.velocityY -= dx * force * 0.05 * speed;
-                }
-                break;
-
-            case 'attract':
-                const ax = mouseX - this.x;
-                const ay = mouseY - this.y;
-                const aDistSq = ax * ax + ay * ay;
-                if (aDistSq < 40000) { // 200 * 200 = 40000
-                    const force = (200 - Math.sqrt(aDistSq)) / 200;
-                    this.velocityX += ax * force * 0.02 * speed;
-                    this.velocityY += ay * force * 0.02 * speed;
-                }
-                break;
-
-            case 'repel':
-                const rx = this.x - mouseX;
-                const ry = this.y - mouseY;
-                const rDistSq = rx * rx + ry * ry;
-                if (rDistSq < 22500) { // 150 * 150 = 22500
-                    const force = (150 - Math.sqrt(rDistSq)) / 150;
-                    this.velocityX += rx * force * 0.05 * speed;
-                    this.velocityY += ry * force * 0.05 * speed;
-                }
-                break;
-
-            case 'fluid':
-                for (let other of particles) {
-                    if (other === this) continue;
-                    const fx = other.x - this.x;
-                    const fy = other.y - this.y;
-                    const fDistSq = fx * fx + fy * fy;
-                    if (fDistSq < 2500 && fDistSq > 0) { // 50 * 50 = 2500
-                        const dist = Math.sqrt(fDistSq);
-                        const force = (1 - dist / 50) * speed;
-                        const invDist = 1 / dist; // Calculate inverse once
-                        this.velocityX += (fx * invDist) * force * 0.2;
-                        this.velocityY += (fy * invDist) * force * 0.2;
+                { // Use block scope for temp variables
+                    const dx = mouseX - this.x;
+                    const dy = mouseY - this.y;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < 22500) {
+                        const force = (150 - Math.sqrt(distSq)) / 150;
+                        const acc = force * 0.05 * options.speedMultiplier;
+                        this.velocityX += dy * acc;
+                        this.velocityY -= dx * acc;
                     }
                 }
                 break;
 
+            case 'attract':
+                {
+                    const dx = mouseX - this.x;
+                    const dy = mouseY - this.y;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < 40000) {
+                        const force = (200 - Math.sqrt(distSq)) / 200;
+                        const acc = force * 0.02 * options.speedMultiplier;
+                        this.velocityX += dx * acc;
+                        this.velocityY += dy * acc;
+                    }
+                }
+                break;
+
+            case 'repel':
+                {
+                    const dx = this.x - mouseX;
+                    const dy = this.y - mouseY;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < 22500) {
+                        const force = (150 - Math.sqrt(distSq)) / 150;
+                        const acc = force * 0.05 * options.speedMultiplier;
+                        this.velocityX += dx * acc;
+                        this.velocityY += dy * acc;
+                    }
+                }
+                break;
+
+            case 'fluid':
             case 'springs':
-                for (let other of particles) {
-                    if (other === this) continue;
-                    const sx = other.x - this.x;
-                    const sy = other.y - this.y;
-                    const sDistSq = sx * sx + sy * sy;
-                    if (sDistSq < 2500 && sDistSq > 0) { // 50 * 50 = 2500
-                        const dist = Math.sqrt(sDistSq);
-                        const force = (dist - 25) * 0.03 * speed;
-                        const invDist = 1 / dist; // Calculate inverse once
-                        this.velocityX += (sx * invDist) * force;
-                        this.velocityY += (sy * invDist) * force;
+                {
+                    const isSprings = options.mode === 'springs';
+                    const forceMultiplier = isSprings ? 0.03 : 0.2; // Different multipliers
+                    const targetDistance = isSprings ? 25 : 0;
+
+                    for (let other of nearbyParticles) {
+                        if (other === this) continue;
+                        const dx = other.x - this.x;
+                        const dy = other.y - this.y;
+                        const distSq = dx * dx + dy * dy;
+                        if (distSq < 2500 && distSq > 0) {
+                            const dist = Math.sqrt(distSq);
+                            const force = (dist - targetDistance) * forceMultiplier * options.speedMultiplier;
+                            const invDist = 1 / dist;
+                            this.velocityX += dx * invDist * force;
+                            this.velocityY += dy * invDist * force;
+                        }
                     }
                 }
                 break;
 
             default:
-                this.velocityX += gravityX * 30 * dt * speed;
-                this.velocityY += gravityY * 30 * dt * speed;
+                this.velocityX += gravityX * 30 * dt * options.speedMultiplier;
+                this.velocityY += gravityY * 30 * dt * options.speedMultiplier;
         }
 
         // Apply physics
         this.velocityX *= options.friction;
         this.velocityY *= options.friction;
 
-        // Limit speed using squared speed
+        // Limit speed
         const currentSpeedSq = this.velocityX * this.velocityX + this.velocityY * this.velocityY;
-        const maxSpeed = 15 * speed;
         const maxSpeedSq = maxSpeed * maxSpeed;
         if (currentSpeedSq > maxSpeedSq) {
             const ratio = maxSpeed / Math.sqrt(currentSpeedSq);
@@ -184,144 +193,144 @@ class Particle {
         this.x += this.velocityX;
         this.y += this.velocityY;
 
-        // Update rotation for non-circular shapes
+        // Update rotation
         if (options.type !== 'circle') {
             this.rotation += this.rotationSpeed;
         }
 
-        // Update color if in kinetic mode
+        // Update color (if kinetic)
         this.updateColor();
 
-        // Handle collisions
-        this.handleCollisions(particles);
+        // Handle collisions (optimized to use nearbyParticles)
+        this.handleCollisions(nearbyParticles);
         this.handleBoundaries();
     }
 
-    handleCollisions(particles) {
-        // Iterate through particles (spatial partitioning would be implemented here)
-        for (let other of particles) {
+    handleCollisions(nearbyParticles) {
+        const { options } = this;
+        for (let other of nearbyParticles) {
             if (other === this) continue;
 
             const dx = other.x - this.x;
             const dy = other.y - this.y;
             const distSq = dx * dx + dy * dy;
 
-            // Adjust collision distance based on shape
-            let thisRadius = this.options.size;
+            // Collision radius based on shape
+            let thisRadius = options.size;
             let otherRadius = other.options.size;
-
-            if (this.options.type === 'square') thisRadius *= Math.SQRT2;
+            if (options.type === 'square') thisRadius *= Math.SQRT2;
             if (other.options.type === 'square') otherRadius *= Math.SQRT2;
-            if (this.options.type === 'triangle') thisRadius *= 1.5;
+            if (options.type === 'triangle') thisRadius *= 1.5;
             if (other.options.type === 'triangle') otherRadius *= 1.5;
 
             const minDistance = thisRadius + otherRadius;
             const minDistanceSq = minDistance * minDistance;
 
-            if (distSq < minDistanceSq && distSq > 0) {
-                const distance = Math.sqrt(distSq);
-                // Calculate collision response
-                const angle = Math.atan2(dy, dx);
-                // Cache sin and cos
-                const sin = Math.sin(angle);
-                const cos = Math.cos(angle);
+            if (distSq >= minDistanceSq || distSq === 0) continue; // No collision or exactly overlapping
 
-                // Rotate velocities
-                const vx1 = this.velocityX * cos + this.velocityY * sin;
-                const vy1 = this.velocityY * cos - this.velocityX * sin;
-                const vx2 = other.velocityX * cos + other.velocityY * sin;
-                const vy2 = other.velocityY * cos - other.velocityX * sin;
+            const distance = Math.sqrt(distSq);
+            const angle = Math.atan2(dy, dx);
+            const sin = Math.sin(angle);
+            const cos = Math.cos(angle);
 
-                // Collision reaction
-                const m1 = this.mass;
-                const m2 = other.mass;
-                const u1 = ((m1 - m2) * vx1 + 2 * m2 * vx2) / (m1 + m2);
-                const u2 = ((m2 - m1) * vx2 + 2 * m1 * vx1) / (m1 + m2);
+            // Rotate velocities
+            const vx1 = this.velocityX * cos + this.velocityY * sin;
+            const vy1 = this.velocityY * cos - this.velocityX * sin;
+            const vx2 = other.velocityX * cos + other.velocityY * sin;
+            const vy2 = other.velocityY * cos - other.velocityX * sin;
 
-                // Update velocities
-                this.velocityX = (u1 * cos - vy1 * sin) * this.options.bounce;
-                this.velocityY = (vy1 * cos + u1 * sin) * this.options.bounce;
-                other.velocityX = (u2 * cos - vy2 * sin) * other.options.bounce;
-                other.velocityY = (vy2 * cos + u2 * sin) * other.options.bounce;
+            // Collision reaction (optimized)
+            const m1 = this.mass;
+            const m2 = other.mass;
+            const mSum = m1 + m2;
+            const u1 = ((m1 - m2) * vx1 + 2 * m2 * vx2) / mSum;
+            const u2 = ((m2 - m1) * vx2 + 2 * m1 * vx1) / mSum;
 
-                // Prevent overlapping
-                const overlap = minDistance - distance;
-                const separationX = (dx / distance) * overlap * 0.5;
-                const separationY = (dy / distance) * overlap * 0.5;
+            // Update velocities
+            const bounce = options.bounce; // Cache for potential slight optimization
+            this.velocityX = (u1 * cos - vy1 * sin) * bounce;
+            this.velocityY = (vy1 * cos + u1 * sin) * bounce;
+            other.velocityX = (u2 * cos - vy2 * sin) * other.options.bounce;
+            other.velocityY = (vy2 * cos + u2 * sin) * other.options.bounce;
 
-                this.x -= separationX;
-                this.y -= separationY;
-                other.x += separationX;
-                other.y += separationY;
+            // Prevent overlapping (optimized)
+            const overlap = minDistance - distance;
+            const separation = overlap * 0.5;
+            const invDist = 1 / distance;
+            const separationX = dx * invDist * separation;
+            const separationY = dy * invDist * separation;
 
-                // Add rotation transfer for non-circular shapes
-                if (this.options.type !== 'circle' || other.options.type !== 'circle') {
-                    const rotationTransfer = 0.2;
-                    const avgRotation = (this.rotationSpeed + other.rotationSpeed) * 0.5;
-                    this.rotationSpeed = avgRotation * (1 + rotationTransfer);
-                    other.rotationSpeed = avgRotation * (1 - rotationTransfer);
-                }
+            this.x -= separationX;
+            this.y -= separationY;
+            other.x += separationX;
+            other.y += separationY;
+
+            // Rotation transfer
+            if (options.type !== 'circle' || other.options.type !== 'circle') {
+                const rotationTransfer = 0.2;
+                const avgRotation = (this.rotationSpeed + other.rotationSpeed) * 0.5;
+                this.rotationSpeed = avgRotation * (1 + rotationTransfer);
+                other.rotationSpeed = avgRotation * (1 - rotationTransfer);
             }
         }
     }
 
     handleBoundaries() {
-        let margin = this.options.size;
+        const { canvas, options } = this;
+        let margin = options.size;
 
-        // Adjust margin based on shape
-        if (this.options.type === 'square') margin *= Math.SQRT2;
-        if (this.options.type === 'triangle') margin *= 1.5;
+        if (options.type === 'square') margin *= Math.SQRT2;
+        if (options.type === 'triangle') margin *= 1.5;
+
+        const bounce = -options.bounce; // Pre-calculate for slight optimization
 
         if (this.x < margin) {
             this.x = margin;
-            this.velocityX *= -this.options.bounce;
+            this.velocityX *= bounce;
             this.rotationSpeed *= 0.8;
-        } else if (this.x > this.canvas.width - margin) {
-            this.x = this.canvas.width - margin;
-            this.velocityX *= -this.options.bounce;
+        } else if (this.x > canvas.width - margin) {
+            this.x = canvas.width - margin;
+            this.velocityX *= bounce;
             this.rotationSpeed *= 0.8;
         }
 
         if (this.y < margin) {
             this.y = margin;
-            this.velocityY *= -this.options.bounce;
+            this.velocityY *= bounce;
             this.rotationSpeed *= 0.8;
-        } else if (this.y > this.canvas.height - margin) {
-            this.y = this.canvas.height - margin;
-            this.velocityY *= -this.options.bounce;
+        } else if (this.y > canvas.height - margin) {
+            this.y = canvas.height - margin;
+            this.velocityY *= bounce;
             this.rotationSpeed *= 0.8;
         }
     }
 
     draw() {
-        const { ctx } = this;
-        ctx.fillStyle = this.color; // Use the potentially updated color
+        const { ctx, options } = this;
+        ctx.fillStyle = this.color;
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
 
-        switch (this.options.type) {
+        // Use bitwise shift for triangle size calculation (minor optimization)
+        const size = options.type === 'triangle' ? options.size << 1 : options.size;
+
+        switch (options.type) {
             case 'circle':
                 ctx.beginPath();
-                ctx.arc(0, 0, this.options.size, 0, Math.PI * 2);
+                ctx.arc(0, 0, size, 0, Math.PI * 2);
                 ctx.fill();
                 break;
             case 'triangle':
                 ctx.beginPath();
-                const size = this.options.size * 1.5;
-                ctx.moveTo(-size, size / 2);
-                ctx.lineTo(size, size / 2);
+                ctx.moveTo(-size, size >> 1);
+                ctx.lineTo(size, size >> 1);
                 ctx.lineTo(0, -size);
                 ctx.closePath();
                 ctx.fill();
                 break;
             default: // square
-                ctx.fillRect(
-                    -this.options.size,
-                    -this.options.size,
-                    this.options.size * 2,
-                    this.options.size * 2
-                );
+                ctx.fillRect(-size, -size, size * 2, size * 2);
         }
 
         ctx.restore();
@@ -351,7 +360,7 @@ class ParticleSystem {
         // Default options
         this.options = {
             particleCount: 100,
-            colorMode: 'kinetic', // Default to kinetic mode
+            colorMode: 'kinetic',
             singleColor: '#00ff88',
             particleType: 'circle',
             physicsMode: 'normal',
@@ -363,8 +372,8 @@ class ParticleSystem {
             explosionForce: 5.0
         };
 
-        // Spatial Partitioning (Grid-based example)
-        this.gridSize = 100; // Adjust as needed
+        // Spatial Partitioning (Grid-based)
+        this.gridSize = 100;
         this.grid = [];
 
         // Particle Pool
@@ -374,7 +383,7 @@ class ParticleSystem {
         this.canvasWidth = canvas.width;
         this.canvasHeight = canvas.height;
 
-        // Dirty rectangles for drawing optimization
+        // Dirty rectangles optimization
         this.dirtyRects = [];
 
         this.init();
@@ -390,45 +399,62 @@ class ParticleSystem {
     }
 
     createParticles() {
-        this.particles = [];
-        const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier } = this.options
-        for (let i = 0; i < particleCount; i++) {
-            const size = sizeMode === 'uniform'
-                ? sizeRange[1]
-                : utils.randomRange(...sizeRange);
-            // Get from pool if available, otherwise create new
-            let particle;
+        const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier } = this.options;
+        const particlePoolWasEmpty = this.particlePool.length === 0;
+
+        // Try to reuse particles from the pool
+        while (this.particles.length < particleCount) {
             if (this.particlePool.length > 0) {
-                particle = this.particlePool.pop();
-                particle.options = {
-                    ...particle.options,
-                    size,
-                    colorMode,
-                    singleColor,
-                    type: particleType,
-                    mode: physicsMode,
-                    speedMultiplier
+                const particle = this.particlePool.pop();
+                // Correctly update particle size based on sizeMode
+                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+
+                // Update particle options if needed (only if they have changed)
+                if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
+                    particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier) {
+
+                    particle.options.size = size; // Update the size properly
+                    particle.options.sizeMode = sizeMode;
+                    particle.options.sizeRange = sizeRange;
+                    particle.options.colorMode = colorMode;
+                    particle.options.singleColor = singleColor;
+                    particle.options.type = particleType;
+                    particle.options.mode = physicsMode;
+                    particle.options.speedMultiplier = speedMultiplier;
                 }
-                particle.color = particle.options.color || utils.getRandomColor(particle.options.colorMode, particle.options.singleColor);
-                particle.mass = particle.options.size * 0.1;
+
+                if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
+                    particle.color = singleColor;
+                }
+
                 particle.reset();
+                this.particles.push(particle);
             } else {
-                particle = new Particle(this.canvas, {
-                    size,
+                // Create new particle only if the pool is empty
+                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+                this.particles.push(new Particle(this.canvas, {
+                    size, // Apply size correctly to new particles
                     colorMode,
                     singleColor,
                     type: particleType,
                     mode: physicsMode,
                     speedMultiplier
-                });
+                }));
             }
-            this.particles.push(particle);
         }
-        // Rebuild spatial grid after creating particles
-        this.buildSpatialGrid();
+
+        // Remove extra particles if count is reduced
+        while (this.particles.length > particleCount) {
+            this.particlePool.push(this.particles.pop());
+        }
+
+        // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
+        if (particlePoolWasEmpty || this.particles.length !== particleCount) {
+            this.buildSpatialGrid();
+        }
     }
 
-    // Build Spatial Grid (for collision optimization)
+    // Build Spatial Grid
     buildSpatialGrid() {
         const { canvasWidth, canvasHeight, gridSize } = this;
         const cols = Math.ceil(canvasWidth / gridSize);
@@ -445,12 +471,14 @@ class ParticleSystem {
         for (let particle of this.particles) {
             const cellX = Math.floor(particle.x / gridSize);
             const cellY = Math.floor(particle.y / gridSize);
-            if (this.grid[cellY] && this.grid[cellY][cellX])
+            // Check for out-of-bounds cells
+            if (cellX >= 0 && cellX < cols && cellY >= 0 && cellY < rows) {
                 this.grid[cellY][cellX].push(particle);
+            }
         }
     }
 
-    // Get particles in nearby cells for collision detection
+    // Get particles in nearby cells
     getNearbyParticles(particle) {
         const { gridSize } = this;
         const cellX = Math.floor(particle.x / gridSize);
@@ -470,17 +498,19 @@ class ParticleSystem {
 
     explodeAtPoint(x, y, radius = 200) {
         const radiusSq = radius * radius;
-        this.particles.forEach(particle => {
+        const { explosionForce } = this.options;
+        for (let particle of this.particles) {
             const dx = particle.x - x;
             const dy = particle.y - y;
             const distanceSq = dx * dx + dy * dy;
             if (distanceSq < radiusSq) {
-                const force = (1 - Math.sqrt(distanceSq) / radius) * this.options.explosionForce;
+                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
                 const angle = Math.atan2(dy, dx);
+                // Combine random and directional velocity for a more natural explosion
                 particle.velocityX += Math.cos(angle) * force * 20 + utils.randomRange(-1, 1);
                 particle.velocityY += Math.sin(angle) * force * 20 + utils.randomRange(-1, 1);
             }
-        });
+        }
     }
 
     bindEvents() {
@@ -489,6 +519,7 @@ class ParticleSystem {
         const moveHandler = (x, y) => {
             this.mouseX = x;
             this.mouseY = y;
+            // Pre-calculate center for slight optimization
             const centerX = this.canvasWidth / 2;
             const centerY = this.canvasHeight / 2;
             this.gravityX = (x - centerX) * 0.005;
@@ -519,10 +550,12 @@ class ParticleSystem {
                     this.reset();
                     break;
                 case 'm':
-                    const physicsMode = document.getElementById('physicsMode');
-                    const nextIndex = (physicsMode.selectedIndex + 1) % physicsMode.options.length;
-                    physicsMode.selectedIndex = nextIndex;
-                    physicsMode.dispatchEvent(new Event('change'));
+                    {
+                        const physicsMode = document.getElementById('physicsMode');
+                        // Use a more efficient way to cycle through options
+                        physicsMode.selectedIndex = (physicsMode.selectedIndex + 1) % physicsMode.options.length;
+                        physicsMode.dispatchEvent(new Event('change'));
+                    }
                     break;
                 case 'e':
                     this.explodeAtPoint(this.mouseX, this.mouseY);
@@ -530,27 +563,24 @@ class ParticleSystem {
             }
         });
 
-        // Device Motion Event (for gravity)
+        // Device Motion (Optimized)
         if (window.DeviceMotionEvent) {
             const permissionBtn = document.getElementById('requestMotionPermission');
             const sensorToggle = document.getElementById('sensorToggle');
             sensorToggle.checked = true;
 
             const handleDeviceMotion = (event) => {
-                // Only use sensor values if the toggle is checked
-                if (this.useSensor) {
-                    // Adjust sensitivity and direction as needed
-                    this.sensorGravityX = -event.accelerationIncludingGravity.x * 0.2;
-                    this.sensorGravityY = event.accelerationIncludingGravity.y * 0.2;
-                }
+                if (!this.useSensor) return;
+                // Access properties directly for slight optimization
+                this.sensorGravityX = -event.accelerationIncludingGravity.x * 0.2;
+                this.sensorGravityY = event.accelerationIncludingGravity.y * 0.2;
             };
 
             const addDeviceMotionListener = () => {
                 window.addEventListener('devicemotion', handleDeviceMotion);
-                permissionBtn.style.display = 'none'; // Hide button after permission is granted
+                permissionBtn.style.display = 'none';
             };
 
-            // For iOS 13+, request permission
             if (typeof DeviceMotionEvent.requestPermission === 'function') {
                 permissionBtn.style.display = 'block';
                 permissionBtn.addEventListener('click', () => {
@@ -565,17 +595,14 @@ class ParticleSystem {
                         .catch(console.error);
                 });
             } else {
-                // For older devices, just add the listener directly
                 addDeviceMotionListener();
             }
         }
 
         // Toggle Sensor Input
-        const sensorToggle = document.getElementById('sensorToggle');
-        sensorToggle.addEventListener('change', () => {
-            this.useSensor = sensorToggle.checked;
+        document.getElementById('sensorToggle')?.addEventListener('change', (e) => {
+            this.useSensor = e.target.checked;
             if (!this.useSensor) {
-                // Reset sensor gravity values when turning off
                 this.sensorGravityX = 0;
                 this.sensorGravityY = 0;
             }
@@ -583,6 +610,7 @@ class ParticleSystem {
     }
 
     bindControls() {
+        // Particle Slider (Optimized with logarithmic scale)
         const particleSlider = document.getElementById('particleSlider');
         const particleValue = document.getElementById('particleValue');
         const minParticles = 1;
@@ -590,141 +618,147 @@ class ParticleSystem {
         const logMin = Math.log(minParticles);
         const logMax = Math.log(maxParticles);
 
-        // Function to calculate particle count from slider value
         function getParticleCount(sliderValue) {
-            const logValue = logMin + (sliderValue / 100) * (logMax - logMin);
-            return Math.round(Math.exp(logValue));
+            // Optimized logarithmic scale calculation
+            return Math.round(Math.exp(logMin + (sliderValue / 100) * (logMax - logMin)));
         }
 
-        // Function to update particle count based on slider position
         const updateParticleCount = (sliderValue) => {
             const count = getParticleCount(sliderValue);
             particleValue.textContent = count;
             this.options.particleCount = count;
             this.createParticles();
-        }
+        };
 
-        // Initial update
         updateParticleCount(particleSlider.value);
+        particleSlider.addEventListener('input', () => updateParticleCount(particleSlider.value));
 
-        // Handle slider input
-        particleSlider.addEventListener('input', () => {
-            updateParticleCount(particleSlider.value);
-        });
-
+        // Size Slider
         const sizeSlider = document.getElementById('sizeSlider');
+        const sizeValue = document.getElementById('sizeValue'); // Get the sizeValue element
         sizeSlider.addEventListener('input', (e) => {
             const maxSize = parseInt(e.target.value);
-            const minSize = Math.max(2, maxSize / 8);
+            const minSize = Math.max(2, maxSize >> 3);
             this.options.sizeRange = [minSize, maxSize];
-            document.getElementById('sizeValue').textContent = `${minSize.toFixed(1)}-${maxSize.toFixed(1)}`;
+            sizeValue.textContent = `${minSize.toFixed(1)}-${maxSize.toFixed(1)}`; // Update sizeValue
 
+            // Adjust max particle count based on size (optimized)
             const avgSize = (minSize + maxSize) / 2;
             const sizeMultiplier = Math.max(0.2, 16 / avgSize);
             const adjustedMax = Math.floor(1000 * sizeMultiplier);
 
             if (this.options.particleCount > adjustedMax) {
                 this.options.particleCount = adjustedMax;
-                document.getElementById('particleValue').textContent = adjustedMax;
+                particleValue.textContent = adjustedMax;
                 particleSlider.value = adjustedMax;
+            }
+            // Update size in existing particles
+            for (let p of this.particles) {
+                if (this.options.sizeMode === 'random') {
+                    p.options.size = utils.randomRange(minSize, maxSize);
+                } else {
+                    p.options.size = maxSize;
+                }
             }
 
             this.createParticles();
         });
 
-        const sizeMode = document.getElementById('sizeMode');
-        sizeMode.addEventListener('change', (e) => {
+        // Size Mode
+        document.getElementById('sizeMode')?.addEventListener('change', (e) => {
             this.options.sizeMode = e.target.value;
+
+            // Update size in existing particles based on new mode
+            for (let p of this.particles) {
+                if (this.options.sizeMode === 'random') {
+                    p.options.size = utils.randomRange(...this.options.sizeRange);
+                } else {
+                    p.options.size = this.options.sizeRange[1]; // Max size for uniform
+                }
+            }
+
             this.createParticles();
         });
 
-        const speedSlider = document.getElementById('speedSlider');
-        speedSlider.addEventListener('input', (e) => {
+        // Other Controls (Simplified and optimized where possible)
+        document.getElementById('speedSlider')?.addEventListener('input', (e) => {
             this.options.speedMultiplier = parseFloat(e.target.value);
-            document.getElementById('speedValue').textContent =
-                this.options.speedMultiplier.toFixed(1);
-            this.particles.forEach(p => {
+            document.getElementById('speedValue').textContent = this.options.speedMultiplier.toFixed(1);
+            // Update speedMultiplier in particle options directly
+            for (let p of this.particles) {
                 p.options.speedMultiplier = this.options.speedMultiplier;
-            });
+                p.maxSpeed = 15 * this.options.speedMultiplier;
+            }
         });
 
-        const gravitySlider = document.getElementById('gravitySlider');
-        gravitySlider.addEventListener('input', (e) => {
+        document.getElementById('gravitySlider')?.addEventListener('input', (e) => {
             this.options.gravity = parseFloat(e.target.value);
-            document.getElementById('gravityValue').textContent =
-                this.options.gravity.toFixed(1);
+            document.getElementById('gravityValue').textContent = this.options.gravity.toFixed(1);
         });
 
-        const windSlider = document.getElementById('windSlider');
-        windSlider.addEventListener('input', (e) => {
+        document.getElementById('windSlider')?.addEventListener('input', (e) => {
             this.options.windForce = parseFloat(e.target.value);
-            document.getElementById('windValue').textContent =
-                this.options.windForce.toFixed(1);
+            document.getElementById('windValue').textContent = this.options.windForce.toFixed(1);
         });
 
-        const particleType = document.getElementById('particleType');
-        particleType.addEventListener('change', (e) => {
+        document.getElementById('particleType')?.addEventListener('change', (e) => {
             this.options.particleType = e.target.value;
-            this.particles.forEach(p => {
+            // Update type in particle options directly
+            for (let p of this.particles) {
                 p.options.type = e.target.value;
-            });
+            }
         });
 
         const colorMode = document.getElementById('colorMode');
         const colorPicker = document.getElementById('colorPicker');
 
-        // Set default selected option for colorMode
-        colorMode.value = 'kinetic';
+        colorMode.value = 'kinetic'; // Default
 
         colorMode.addEventListener('change', (e) => {
             this.options.colorMode = e.target.value;
             colorPicker.style.display = e.target.value === 'single' ? 'block' : 'none';
-            this.particles.forEach(p => {
+            // Update colorMode in particle options and color directly
+            for (let p of this.particles) {
                 p.options.colorMode = e.target.value;
                 p.color = e.target.value === 'single'
                     ? this.options.singleColor
                     : utils.getRandomColor(e.target.value);
-            });
+            }
         });
 
         colorPicker.addEventListener('input', (e) => {
             this.options.singleColor = e.target.value;
             if (this.options.colorMode === 'single') {
-                this.particles.forEach(p => {
+                for (let p of this.particles) {
                     p.color = e.target.value;
-                });
+                }
             }
         });
 
-        const physicsMode = document.getElementById('physicsMode');
-        physicsMode.addEventListener('change', (e) => {
+        document.getElementById('physicsMode')?.addEventListener('change', (e) => {
             this.options.physicsMode = e.target.value;
-            document.getElementById('currentMode').textContent =
-                e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
-            this.particles.forEach(p => {
+            document.getElementById('currentMode').textContent = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
+            // Update mode in particle options directly
+            for (let p of this.particles) {
                 p.options.mode = e.target.value;
-            });
+            }
         });
 
-        document.getElementById('resetBtn').addEventListener('click', () => this.reset());
-        document.getElementById('explodeBtn').addEventListener('click', () => {
-            this.explodeAtPoint(this.mouseX, this.mouseY);
-        });
-        document.getElementById('modeBtn').addEventListener('click', () => {
-            const event = new Event('change');
+        document.getElementById('resetBtn')?.addEventListener('click', () => this.reset());
+        document.getElementById('explodeBtn')?.addEventListener('click', () => this.explodeAtPoint(this.mouseX, this.mouseY));
+        document.getElementById('modeBtn')?.addEventListener('click', () => {
+            const physicsMode = document.getElementById('physicsMode');
             physicsMode.selectedIndex = (physicsMode.selectedIndex + 1) % physicsMode.options.length;
-            physicsMode.dispatchEvent(event);
+            physicsMode.dispatchEvent(new Event('change'));
         });
-        document.getElementById('toggleUI').addEventListener('click', () => this.toggleUI());
+        document.getElementById('toggleUI')?.addEventListener('click', () => this.toggleUI());
     }
 
     resize() {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
-        // Update cached dimensions
         this.canvasWidth = this.canvas.width;
         this.canvasHeight = this.canvas.height;
-        // Rebuild spatial grid after resizing
         this.buildSpatialGrid();
     }
 
@@ -732,8 +766,8 @@ class ParticleSystem {
         this.frameCount++;
         if (timestamp - this.fpsTime >= 1000) {
             this.fps = this.frameCount;
-            // Limit DOM updates for FPS counter
-            if (this.fps % 5 === 0) { // Update every 5 frames
+            // Update FPS counter less frequently
+            if (this.frameCount % 10 === 0) {
                 document.getElementById('fps').textContent = `FPS: ${this.fps}`;
             }
             this.frameCount = 0;
@@ -749,26 +783,33 @@ class ParticleSystem {
 
         this.updateFPS(timestamp);
 
-        // Clear dirty rectangles or full canvas
+        // Optimized clearing with dirty rectangles
         if (this.dirtyRects.length > 0) {
-            this.dirtyRects.forEach(rect => {
+            // Use a Set to avoid duplicate dirty rectangles
+            const uniqueDirtyRects = new Set();
+            for (let rect of this.dirtyRects) {
+                uniqueDirtyRects.add(JSON.stringify(rect));
+            }
+            this.dirtyRects = Array.from(uniqueDirtyRects).map(JSON.parse);
+
+            for (let rect of this.dirtyRects) {
                 this.ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
-            });
+            }
             this.dirtyRects = [];
         } else {
             this.ctx.fillStyle = '#000000';
             this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
         }
 
-        this.particles.forEach(particle => {
-            // Add to dirty rects for partial redrawing
+        for (let particle of this.particles) {
+            // Add to dirty rects before update
             this.dirtyRects.push({
-                x: Math.floor(particle.x - particle.options.size * 2),
-                y: Math.floor(particle.y - particle.options.size * 2),
-                width: Math.ceil(particle.options.size * 4),
-                height: Math.ceil(particle.options.size * 4)
+                x: Math.max(0, Math.floor(particle.x - particle.options.size * 2)),
+                y: Math.max(0, Math.floor(particle.y - particle.options.size * 2)),
+                width: Math.min(this.canvasWidth, Math.ceil(particle.options.size * 4)),
+                height: Math.min(this.canvasHeight, Math.ceil(particle.options.size * 4))
             });
-            // Spatial Partitioning: Get nearby particles instead of all particles
+
             const nearbyParticles = this.getNearbyParticles(particle);
             particle.update(
                 this.gravityX + this.options.windForce + this.sensorGravityX,
@@ -776,33 +817,35 @@ class ParticleSystem {
                 deltaTime,
                 this.mouseX,
                 this.mouseY,
-                nearbyParticles // Pass nearby particles only
+                nearbyParticles
             );
-            // Add to dirty rects for partial redrawing
+
+            // Add to dirty rects after update
             this.dirtyRects.push({
-                x: Math.floor(particle.x - particle.options.size * 2),
-                y: Math.floor(particle.y - particle.options.size * 2),
-                width: Math.ceil(particle.options.size * 4),
-                height: Math.ceil(particle.options.size * 4)
+                x: Math.max(0, Math.floor(particle.x - particle.options.size * 2)),
+                y: Math.max(0, Math.floor(particle.y - particle.options.size * 2)),
+                width: Math.min(this.canvasWidth, Math.ceil(particle.options.size * 4)),
+                height: Math.min(this.canvasHeight, Math.ceil(particle.options.size * 4))
             });
 
             particle.draw();
-        });
+        }
 
-        // Rebuild spatial grid every frame (could be optimized further)
+        // Rebuild spatial grid (consider optimizing the frequency)
         this.buildSpatialGrid();
 
         requestAnimationFrame((t) => this.update(t));
     }
 
     reset() {
-        this.ctx.fillStyle = '#000000';
+        // Clear the canvas efficiently
+                this.ctx.fillStyle = '#000000';
         this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
-        // Return particles to the pool instead of destroying
-        this.particles.forEach(particle => {
-            this.particlePool.push(particle);
-        });
-        this.particles = [];
+
+        // Return particles to the pool (optimized)
+        this.particlePool.push(...this.particles);
+        this.particles.length = 0;
+
         this.createParticles();
     }
 
