@@ -451,65 +451,65 @@ class ParticleSystem {
     }
 
     createParticles() {
-    const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier, turbulenceStrength, turbulenceScale } = this.options;
-    const particlePoolWasEmpty = this.particlePool.length === 0;
+        const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier, turbulenceStrength, turbulenceScale } = this.options;
+        const particlePoolWasEmpty = this.particlePool.length === 0;
 
-    // Try to reuse particles from the pool
-    while (this.particles.length < particleCount) {
-        if (this.particlePool.length > 0) {
-            const particle = this.particlePool.pop();
-            // Correctly update particle size based on sizeMode
-            const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+        // Try to reuse particles from the pool
+        while (this.particles.length < particleCount) {
+            if (this.particlePool.length > 0) {
+                const particle = this.particlePool.pop();
+                // Correctly update particle size based on sizeMode
+                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
 
-            // Update particle options if needed (only if they have changed)
-            if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
-                particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier ||
-                particle.options.turbulenceStrength !== turbulenceStrength || particle.options.turbulenceScale !== turbulenceScale) {
+                // Update particle options if needed (only if they have changed)
+                if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
+                    particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier ||
+                    particle.options.turbulenceStrength !== turbulenceStrength || particle.options.turbulenceScale !== turbulenceScale) {
 
-                particle.options.size = size; // Update the size properly
-                particle.options.sizeMode = sizeMode;
-                particle.options.sizeRange = sizeRange;
-                particle.options.colorMode = colorMode;
-                particle.options.singleColor = singleColor;
-                particle.options.type = particleType;
-                particle.options.mode = physicsMode;
-                particle.options.speedMultiplier = speedMultiplier;
-                particle.options.turbulenceStrength = turbulenceStrength; // ADDED
-                particle.options.turbulenceScale = turbulenceScale;     // ADDED
+                    particle.options.size = size; // Update the size properly
+                    particle.options.sizeMode = sizeMode;
+                    particle.options.sizeRange = sizeRange;
+                    particle.options.colorMode = colorMode;
+                    particle.options.singleColor = singleColor;
+                    particle.options.type = particleType;
+                    particle.options.mode = physicsMode;
+                    particle.options.speedMultiplier = speedMultiplier;
+                    particle.options.turbulenceStrength = turbulenceStrength; // ADDED
+                    particle.options.turbulenceScale = turbulenceScale;     // ADDED
+                }
+
+                if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
+                    particle.color = singleColor;
+                }
+
+                particle.reset();
+                this.particles.push(particle);
+            } else {
+                // Create new particle only if the pool is empty
+                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+                this.particles.push(new Particle(this.canvas, {
+                    size, // Apply size correctly to new particles
+                    colorMode,
+                    singleColor,
+                    type: particleType,
+                    mode: physicsMode,
+                    speedMultiplier,
+                    turbulenceStrength, // ADDED
+                    turbulenceScale      // ADDED
+                }));
             }
+        }
 
-            if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
-                particle.color = singleColor;
-            }
+        // Remove extra particles if count is reduced
+        while (this.particles.length > particleCount) {
+            this.particlePool.push(this.particles.pop());
+        }
 
-            particle.reset();
-            this.particles.push(particle);
-        } else {
-            // Create new particle only if the pool is empty
-            const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
-            this.particles.push(new Particle(this.canvas, {
-                size, // Apply size correctly to new particles
-                colorMode,
-                singleColor,
-                type: particleType,
-                mode: physicsMode,
-                speedMultiplier,
-                turbulenceStrength, // ADDED
-                turbulenceScale      // ADDED
-            }));
+        // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
+        if (particlePoolWasEmpty || this.particles.length !== particleCount) {
+            this.buildSpatialGrid();
         }
     }
-
-    // Remove extra particles if count is reduced
-    while (this.particles.length > particleCount) {
-        this.particlePool.push(this.particles.pop());
-    }
-
-    // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
-    if (particlePoolWasEmpty || this.particles.length !== particleCount) {
-        this.buildSpatialGrid();
-    }
-}
 
     // Build Spatial Grid
     buildSpatialGrid() {
@@ -561,7 +561,7 @@ class ParticleSystem {
             const dy = particle.y - y;
             const distanceSq = dx * dx + dy * dy;
             if (distanceSq < radiusSq) {
-                                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
+                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
                 const angle = Math.atan2(dy, dx);
                 // Combine random and directional velocity for a more natural explosion
                 particle.velocityX += Math.cos(angle) * force * 20 + utils.randomRange(-1, 1);
@@ -680,7 +680,7 @@ class ParticleSystem {
             return Math.round(Math.exp(logMin + (sliderValue / 100) * (logMax - logMin)));
         }
 
-        const updateParticleCount = (sliderValue) => {
+                const updateParticleCount = (sliderValue) => {
             const count = getParticleCount(sliderValue);
             particleValue.textContent = count;
             this.options.particleCount = count;
@@ -753,10 +753,10 @@ class ParticleSystem {
             // Correctly update size in existing particles based on new mode
             const { sizeRange } = this.options;
             for (let p of this.particles) {
-              p.options.size =
-                this.options.sizeMode === 'random'
-                  ? utils.randomRange(...sizeRange)
-                  : sizeRange[1]; // Max size for uniform
+                p.options.size =
+                    this.options.sizeMode === 'random'
+                        ? utils.randomRange(...sizeRange)
+                        : sizeRange[1]; // Max size for uniform
             }
 
             this.createParticles();
@@ -826,13 +826,31 @@ class ParticleSystem {
             <option value="repel">Repel</option>
             <option value="turbulence">Turbulence</option>
         `;
+        // Get references to the turbulence setting elements
+        const turbulenceStrengthSliderContainer = document.querySelector('#turbulenceStrengthSlider').parentElement;
+        const turbulenceScaleSliderContainer = document.querySelector('#turbulenceScaleSlider').parentElement;
+
+        // Initially hide turbulence settings
+        turbulenceStrengthSliderContainer.style.display = 'none';
+        turbulenceScaleSliderContainer.style.display = 'none';
 
         physicsModeSelect.addEventListener('change', (e) => {
-            this.options.physicsMode = e.target.value;
-            document.getElementById('currentMode').textContent = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
+            const selectedMode = e.target.value;
+            this.options.physicsMode = selectedMode;
+            document.getElementById('currentMode').textContent = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
+
+            // Show or hide turbulence settings based on selected mode
+            if (selectedMode === 'turbulence') {
+                turbulenceStrengthSliderContainer.style.display = 'flex';
+                turbulenceScaleSliderContainer.style.display = 'flex';
+            } else {
+                turbulenceStrengthSliderContainer.style.display = 'none';
+                turbulenceScaleSliderContainer.style.display = 'none';
+            }
+
             // Update mode in particle options directly
             for (let p of this.particles) {
-                p.options.mode = e.target.value;
+                p.options.mode = selectedMode;
             }
         });
 
