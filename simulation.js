@@ -359,13 +359,13 @@ class ParticleSystem {
 
         // Default options
         this.options = {
-            particleCount: 100,
+            particleCount: 191, // Changed default particle count
             colorMode: 'kinetic',
             singleColor: '#00ff88',
             particleType: 'circle',
             physicsMode: 'normal',
             sizeMode: 'uniform',
-            sizeRange: [4, 32],
+            sizeRange: [12, 12], // Changed default size to 12
             speedMultiplier: 0.5,
             gravity: 0,
             windForce: 0,
@@ -630,38 +630,65 @@ class ParticleSystem {
             this.createParticles();
         };
 
+        // Set initial particle count to 191 (for the UI display)
+        particleSlider.value = ((Math.log(191) - logMin) / (logMax - logMin)) * 100;
         updateParticleCount(particleSlider.value);
+
+        // Handle slider input
         particleSlider.addEventListener('input', () => updateParticleCount(particleSlider.value));
 
-        // Size Slider
+        // Size Slider (Logarithmic)
         const sizeSlider = document.getElementById('sizeSlider');
-        const sizeValue = document.getElementById('sizeValue'); // Get the sizeValue element
-        sizeSlider.addEventListener('input', (e) => {
-            const maxSize = parseInt(e.target.value);
-            const minSize = Math.max(2, maxSize >> 3);
-            this.options.sizeRange = [minSize, maxSize];
-            sizeValue.textContent = `${minSize.toFixed(1)}-${maxSize.toFixed(1)}`; // Update sizeValue
+        const sizeValue = document.getElementById('sizeValue');
+        const minSize = 2; // Minimum size
+        const maxSize = 32; // Maximum size
+        const logMinSize = Math.log(minSize);
+        const logMaxSize = Math.log(maxSize);
 
-            // Adjust max particle count based on size (optimized)
-            const avgSize = (minSize + maxSize) / 2;
-            const sizeMultiplier = Math.max(0.2, 16 / avgSize);
+        // Function to calculate size from slider value (logarithmic)
+        function getSize(sliderValue) {
+            const logValue = logMinSize + (sliderValue / 100) * (logMaxSize - logMinSize);
+            return Math.round(Math.exp(logValue));
+        }
+
+        // Function to update size based on slider position
+        const updateSize = (sliderValue) => {
+            const size = getSize(sliderValue);
+            this.options.sizeRange = [minSize, size]; // Update sizeRange with min and max
+            sizeValue.textContent = `${minSize.toFixed(1)}-${size.toFixed(1)}`;
+
+            // Adjust max particle count based on size
+            const sizeMultiplier = Math.max(0.2, 16 / size);
             const adjustedMax = Math.floor(1000 * sizeMultiplier);
+            const particleSlider = document.getElementById('particleSlider');
+            const particleValue = document.getElementById('particleValue');
 
             if (this.options.particleCount > adjustedMax) {
                 this.options.particleCount = adjustedMax;
                 particleValue.textContent = adjustedMax;
-                particleSlider.value = adjustedMax;
+                particleSlider.value = adjustedMax; // Update particle slider as well
             }
+
             // Update size in existing particles
             for (let p of this.particles) {
                 if (this.options.sizeMode === 'random') {
-                    p.options.size = utils.randomRange(minSize, maxSize);
+                    p.options.size = utils.randomRange(...this.options.sizeRange);
                 } else {
-                    p.options.size = maxSize;
+                    p.options.size = size;
                 }
             }
 
             this.createParticles();
+        };
+
+        // Set initial size to 12 (for the UI display)
+		
+		        sizeSlider.value = ((Math.log(12) - logMinSize) / (logMaxSize - logMinSize)) * 100;
+        updateSize(sizeSlider.value);
+
+        // Handle slider input
+        sizeSlider.addEventListener('input', () => {
+            updateSize(sizeSlider.value);
         });
 
         // Size Mode
@@ -839,7 +866,7 @@ class ParticleSystem {
 
     reset() {
         // Clear the canvas efficiently
-                this.ctx.fillStyle = '#000000';
+        this.ctx.fillStyle = '#000000';
         this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
         // Return particles to the pool (optimized)
