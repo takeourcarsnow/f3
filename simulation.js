@@ -298,11 +298,10 @@ class Particle {
 
             // Update velocities
             const bounce = options.bounce; // Cache for potential slight optimization
-            const collisionDamping = 0.97; // Damping to reduce oscillations
-            this.velocityX = (u1 * cos - vy1 * sin) * bounce * collisionDamping;
-            this.velocityY = (vy1 * cos + u1 * sin) * bounce * collisionDamping;
-            other.velocityX = (u2 * cos - vy2 * sin) * other.options.bounce * collisionDamping;
-            other.velocityY = (vy2 * cos + u2 * sin) * other.options.bounce * collisionDamping;
+            this.velocityX = (u1 * cos - vy1 * sin) * bounce;
+            this.velocityY = (vy1 * cos + u1 * sin) * bounce;
+            other.velocityX = (u2 * cos - vy2 * sin) * other.options.bounce;
+            other.velocityY = (vy2 * cos + u2 * sin) * other.options.bounce;
 
             // Prevent overlapping (optimized)
             const overlap = minDistance - distance;
@@ -452,65 +451,65 @@ class ParticleSystem {
     }
 
     createParticles() {
-        const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier, turbulenceStrength, turbulenceScale } = this.options;
-        const particlePoolWasEmpty = this.particlePool.length === 0;
+    const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier, turbulenceStrength, turbulenceScale } = this.options;
+    const particlePoolWasEmpty = this.particlePool.length === 0;
 
-        // Try to reuse particles from the pool
-        while (this.particles.length < particleCount) {
-            if (this.particlePool.length > 0) {
-                const particle = this.particlePool.pop();
-                // Correctly update particle size based on sizeMode
-                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+    // Try to reuse particles from the pool
+    while (this.particles.length < particleCount) {
+        if (this.particlePool.length > 0) {
+            const particle = this.particlePool.pop();
+            // Correctly update particle size based on sizeMode
+            const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
 
-                // Update particle options if needed (only if they have changed)
-                if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
-                    particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier ||
-                    particle.options.turbulenceStrength !== turbulenceStrength || particle.options.turbulenceScale !== turbulenceScale) {
+            // Update particle options if needed (only if they have changed)
+            if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
+                particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier ||
+                particle.options.turbulenceStrength !== turbulenceStrength || particle.options.turbulenceScale !== turbulenceScale) {
 
-                    particle.options.size = size; // Update the size properly
-                    particle.options.sizeMode = sizeMode;
-                    particle.options.sizeRange = sizeRange;
-                    particle.options.colorMode = colorMode;
-                    particle.options.singleColor = singleColor;
-                    particle.options.type = particleType;
-                    particle.options.mode = physicsMode;
-                    particle.options.speedMultiplier = speedMultiplier;
-                    particle.options.turbulenceStrength = turbulenceStrength; // ADDED
-                    particle.options.turbulenceScale = turbulenceScale;     // ADDED
-                }
-
-                if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
-                    particle.color = singleColor;
-                }
-
-                particle.reset();
-                this.particles.push(particle);
-            } else {
-                // Create new particle only if the pool is empty
-                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
-                this.particles.push(new Particle(this.canvas, {
-                    size, // Apply size correctly to new particles
-                    colorMode,
-                    singleColor,
-                    type: particleType,
-                    mode: physicsMode,
-                    speedMultiplier,
-                    turbulenceStrength, // ADDED
-                    turbulenceScale      // ADDED
-                }));
+                particle.options.size = size; // Update the size properly
+                particle.options.sizeMode = sizeMode;
+                particle.options.sizeRange = sizeRange;
+                particle.options.colorMode = colorMode;
+                particle.options.singleColor = singleColor;
+                particle.options.type = particleType;
+                particle.options.mode = physicsMode;
+                particle.options.speedMultiplier = speedMultiplier;
+                particle.options.turbulenceStrength = turbulenceStrength; // ADDED
+                particle.options.turbulenceScale = turbulenceScale;     // ADDED
             }
-        }
 
-        // Remove extra particles if count is reduced
-        while (this.particles.length > particleCount) {
-            this.particlePool.push(this.particles.pop());
-        }
+            if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
+                particle.color = singleColor;
+            }
 
-        // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
-        if (particlePoolWasEmpty || this.particles.length !== particleCount) {
-            this.buildSpatialGrid();
+            particle.reset();
+            this.particles.push(particle);
+        } else {
+            // Create new particle only if the pool is empty
+            const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+            this.particles.push(new Particle(this.canvas, {
+                size, // Apply size correctly to new particles
+                colorMode,
+                singleColor,
+                type: particleType,
+                mode: physicsMode,
+                speedMultiplier,
+                turbulenceStrength, // ADDED
+                turbulenceScale      // ADDED
+            }));
         }
     }
+
+    // Remove extra particles if count is reduced
+    while (this.particles.length > particleCount) {
+        this.particlePool.push(this.particles.pop());
+    }
+
+    // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
+    if (particlePoolWasEmpty || this.particles.length !== particleCount) {
+        this.buildSpatialGrid();
+    }
+}
 
     // Build Spatial Grid
     buildSpatialGrid() {
@@ -562,7 +561,7 @@ class ParticleSystem {
             const dy = particle.y - y;
             const distanceSq = dx * dx + dy * dy;
             if (distanceSq < radiusSq) {
-                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
+                                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
                 const angle = Math.atan2(dy, dx);
                 // Combine random and directional velocity for a more natural explosion
                 particle.velocityX += Math.cos(angle) * force * 20 + utils.randomRange(-1, 1);
@@ -687,8 +686,8 @@ class ParticleSystem {
             this.options.particleCount = count;
             this.createParticles();
         };
-		
-		        // Set initial particle count to 191 (for the UI display)
+
+        // Set initial particle count to 191 (for the UI display)
         particleSlider.value = ((Math.log(191) - logMin) / (logMax - logMin)) * 100;
         updateParticleCount(particleSlider.value);
 
@@ -754,10 +753,10 @@ class ParticleSystem {
             // Correctly update size in existing particles based on new mode
             const { sizeRange } = this.options;
             for (let p of this.particles) {
-                p.options.size =
-                    this.options.sizeMode === 'random'
-                        ? utils.randomRange(...sizeRange)
-                        : sizeRange[1]; // Max size for uniform
+              p.options.size =
+                this.options.sizeMode === 'random'
+                  ? utils.randomRange(...sizeRange)
+                  : sizeRange[1]; // Max size for uniform
             }
 
             this.createParticles();
@@ -927,19 +926,6 @@ class ParticleSystem {
             this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
         }
 
-        // Perform multiple collision iterations
-        const collisionIterations = 3;
-        for (let i = 0; i < collisionIterations; i++) {
-            this.buildSpatialGrid();
-            for (let particle of this.particles) {
-                const nearbyParticles = this.getNearbyParticles(particle);
-                particle.handleCollisions(nearbyParticles);
-            }
-        }
-
-        // Sort particles by Y position (approximate depth sorting)
-        this.particles.sort((a, b) => a.y - b.y);
-
         for (let particle of this.particles) {
             // Add to dirty rects before update
             this.dirtyRects.push({
@@ -949,13 +935,14 @@ class ParticleSystem {
                 height: Math.min(this.canvasHeight, Math.ceil(particle.options.size * 4))
             });
 
+            const nearbyParticles = this.getNearbyParticles(particle);
             particle.update(
                 this.gravityX + this.options.windForce + this.sensorGravityX,
                 this.gravityY + this.options.gravity + this.sensorGravityY,
                 deltaTime,
                 this.mouseX,
                 this.mouseY,
-                [] // Pass an empty array, as nearbyParticles are not needed here anymore
+                nearbyParticles
             );
 
             // Add to dirty rects after update
@@ -968,6 +955,9 @@ class ParticleSystem {
 
             particle.draw();
         }
+
+        // Rebuild spatial grid (consider optimizing the frequency)
+        this.buildSpatialGrid();
 
         requestAnimationFrame((t) => this.update(t));
     }
