@@ -1,5 +1,3 @@
-// --- START OF FILE simulation.js ---
-
 // Optimized Utilities
 const utils = {
     lerp: (start, end, amt) => (1 - amt) * start + amt * end,
@@ -41,6 +39,59 @@ const utils = {
         // Optimize hue calculation
         const hue = Math.floor((speed / maxSpeed) * 240);
         return `hsl(${hue}, 80%, 60%)`;
+    },
+    //perlin noise
+    fade: (t) => t * t * t * (t * (t * 6 - 15) + 10),
+
+    lerp: (t, a, b) => a + t * (b - a),
+
+    grad: (hash, x, y, z) => {
+        const h = hash & 15;
+        const u = h < 8 ? x : y;
+        const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    },
+
+    p: [151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180],
+
+    perm: [],
+
+    setup: function () {
+        for (let i = 0; i < 256; i++) {
+            this.perm[i] = this.p[i];
+        }
+        for (let i = 0; i < 256; i++) {
+            this.perm[i + 256] = this.perm[i];
+        }
+    },
+
+    perlinNoise: function (x, y, z) {
+        if (this.perm.length === 0) {
+            this.setup(); // Initialize perm if it hasn't been already
+        }
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const Z = Math.floor(z) & 255;
+
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+        z -= Math.floor(z);
+
+        const u = this.fade(x);
+        const v = this.fade(y);
+        const w = this.fade(z);
+
+        const A = this.perm[X] + Y;
+        const AA = this.perm[A] + Z;
+        const AB = this.perm[A + 1] + Z;
+        const B = this.perm[X + 1] + Y;
+        const BA = this.perm[B] + Z;
+        const BB = this.perm[B + 1] + Z;
+
+        return this.lerp(w, this.lerp(v, this.lerp(u, this.grad(this.perm[AA], x, y, z), this.grad(this.perm[BA], x - 1, y, z)),
+            this.lerp(u, this.grad(this.perm[AB], x, y - 1, z), this.grad(this.perm[BB], x - 1, y - 1, z))),
+            this.lerp(v, this.lerp(u, this.grad(this.perm[AA + 1], x, y, z - 1), this.grad(this.perm[BA + 1], x - 1, y, z - 1)),
+                this.lerp(u, this.grad(this.perm[AB + 1], x, y - 1, z - 1), this.grad(this.perm[BB + 1], x - 1, y - 1, z - 1))));
     }
 };
 
@@ -146,6 +197,28 @@ class Particle {
                         this.velocityY += dy * acc;
                     }
                 }
+                break;
+            case 'turbulence':
+                // Add random, swirling motion (CORRECTED)
+                const turbulenceStrength = this.options.turbulenceStrength;
+                const turbulenceScale = this.options.turbulenceScale;
+
+                // Use Perlin noise (or another noise function) for smooth randomness
+                const noiseX = utils.perlinNoise(this.x * turbulenceScale, this.y * turbulenceScale, performance.now() * 0.001);
+                const noiseY = utils.perlinNoise(this.x * turbulenceScale + 1000, this.y * turbulenceScale + 1000, performance.now() * 0.001);
+
+                // Modify velocity based on noise, but don't let it increase indefinitely
+                const turbulenceInfluence = 0.2; // How much the noise affects velocity (0.0 - 1.0)
+
+                //this.velocityX = utils.lerp(this.velocityX, this.velocityX + noiseX * turbulenceStrength, turbulenceInfluence);
+                //this.velocityY = utils.lerp(this.velocityY, this.velocityY + noiseY * turbulenceStrength, turbulenceInfluence);
+                this.velocityX += noiseX * turbulenceStrength * options.speedMultiplier;
+                this.velocityY += noiseY * turbulenceStrength * options.speedMultiplier;
+
+                // Add a small amount of damping to prevent particles from getting stuck
+                const damping = 0.95;
+                this.velocityX *= damping;
+                this.velocityY *= damping;
                 break;
 
             default: // mode: 'normal'
@@ -346,7 +419,9 @@ class ParticleSystem {
             speedMultiplier: 0.5,
             gravity: 0,
             windForce: 0,
-            explosionForce: 5.0
+            explosionForce: 5.0,
+            turbulenceStrength: 0.5,
+            turbulenceScale: 0.1
         };
 
         // Spatial Partitioning (Grid-based)
@@ -376,60 +451,65 @@ class ParticleSystem {
     }
 
     createParticles() {
-        const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier } = this.options;
-        const particlePoolWasEmpty = this.particlePool.length === 0;
+    const { particleCount, sizeMode, sizeRange, colorMode, singleColor, particleType, physicsMode, speedMultiplier, turbulenceStrength, turbulenceScale } = this.options;
+    const particlePoolWasEmpty = this.particlePool.length === 0;
 
-        // Try to reuse particles from the pool
-        while (this.particles.length < particleCount) {
-            if (this.particlePool.length > 0) {
-                const particle = this.particlePool.pop();
-                // Correctly update particle size based on sizeMode
-                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+    // Try to reuse particles from the pool
+    while (this.particles.length < particleCount) {
+        if (this.particlePool.length > 0) {
+            const particle = this.particlePool.pop();
+            // Correctly update particle size based on sizeMode
+            const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
 
-                // Update particle options if needed (only if they have changed)
-                if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
-                    particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier) {
+            // Update particle options if needed (only if they have changed)
+            if (particle.options.size !== size || particle.options.sizeMode !== sizeMode || particle.options.particleType !== particleType ||
+                particle.options.physicsMode !== physicsMode || particle.options.speedMultiplier !== speedMultiplier ||
+                particle.options.turbulenceStrength !== turbulenceStrength || particle.options.turbulenceScale !== turbulenceScale) {
 
-                    particle.options.size = size; // Update the size properly
-                    particle.options.sizeMode = sizeMode;
-                    particle.options.sizeRange = sizeRange;
-                    particle.options.colorMode = colorMode;
-                    particle.options.singleColor = singleColor;
-                    particle.options.type = particleType;
-                    particle.options.mode = physicsMode;
-                    particle.options.speedMultiplier = speedMultiplier;
-                }
-
-                if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
-                    particle.color = singleColor;
-                }
-
-                particle.reset();
-                this.particles.push(particle);
-            } else {
-                // Create new particle only if the pool is empty
-                const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
-                this.particles.push(new Particle(this.canvas, {
-                    size, // Apply size correctly to new particles
-                    colorMode,
-                    singleColor,
-                    type: particleType,
-                    mode: physicsMode,
-                    speedMultiplier
-                }));
+                particle.options.size = size; // Update the size properly
+                particle.options.sizeMode = sizeMode;
+                particle.options.sizeRange = sizeRange;
+                particle.options.colorMode = colorMode;
+                particle.options.singleColor = singleColor;
+                particle.options.type = particleType;
+                particle.options.mode = physicsMode;
+                particle.options.speedMultiplier = speedMultiplier;
+                particle.options.turbulenceStrength = turbulenceStrength; // ADDED
+                particle.options.turbulenceScale = turbulenceScale;     // ADDED
             }
-        }
 
-        // Remove extra particles if count is reduced
-        while (this.particles.length > particleCount) {
-            this.particlePool.push(this.particles.pop());
-        }
+            if (particle.options.colorMode === 'single' && particle.color !== singleColor) {
+                particle.color = singleColor;
+            }
 
-        // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
-        if (particlePoolWasEmpty || this.particles.length !== particleCount) {
-            this.buildSpatialGrid();
+            particle.reset();
+            this.particles.push(particle);
+        } else {
+            // Create new particle only if the pool is empty
+            const size = sizeMode === 'uniform' ? sizeRange[1] : utils.randomRange(...sizeRange);
+            this.particles.push(new Particle(this.canvas, {
+                size, // Apply size correctly to new particles
+                colorMode,
+                singleColor,
+                type: particleType,
+                mode: physicsMode,
+                speedMultiplier,
+                turbulenceStrength, // ADDED
+                turbulenceScale      // ADDED
+            }));
         }
     }
+
+    // Remove extra particles if count is reduced
+    while (this.particles.length > particleCount) {
+        this.particlePool.push(this.particles.pop());
+    }
+
+    // Only rebuild spatial grid if the particle pool was initially empty or if particles were added/removed
+    if (particlePoolWasEmpty || this.particles.length !== particleCount) {
+        this.buildSpatialGrid();
+    }
+}
 
     // Build Spatial Grid
     buildSpatialGrid() {
@@ -481,7 +561,7 @@ class ParticleSystem {
             const dy = particle.y - y;
             const distanceSq = dx * dx + dy * dy;
             if (distanceSq < radiusSq) {
-                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
+                                const force = (1 - Math.sqrt(distanceSq) / radius) * explosionForce;
                 const angle = Math.atan2(dy, dx);
                 // Combine random and directional velocity for a more natural explosion
                 particle.velocityX += Math.cos(angle) * force * 20 + utils.randomRange(-1, 1);
@@ -744,6 +824,7 @@ class ParticleSystem {
             <option value="vortex">Vortex</option>
             <option value="attract">Attract</option>
             <option value="repel">Repel</option>
+            <option value="turbulence">Turbulence</option>
         `;
 
         physicsModeSelect.addEventListener('change', (e) => {
@@ -762,6 +843,40 @@ class ParticleSystem {
             physicsModeSelect.dispatchEvent(new Event('change'));
         });
         document.getElementById('toggleUI')?.addEventListener('click', () => this.toggleUI());
+
+        // Turbulence Strength Slider
+        const turbulenceStrengthSlider = document.getElementById('turbulenceStrengthSlider');
+        const turbulenceStrengthValue = document.getElementById('turbulenceStrengthValue');
+        turbulenceStrengthSlider.value = this.options.turbulenceStrength;
+        turbulenceStrengthValue.textContent = this.options.turbulenceStrength.toFixed(1);
+
+        turbulenceStrengthSlider.addEventListener('input', (e) => {
+            const strength = parseFloat(e.target.value);
+            this.options.turbulenceStrength = strength;
+            turbulenceStrengthValue.textContent = strength.toFixed(1);
+
+            //update particles turbulence
+            for (let p of this.particles) {
+                p.options.turbulenceStrength = this.options.turbulenceStrength;
+            }
+        });
+
+        // Turbulence Scale Slider
+        const turbulenceScaleSlider = document.getElementById('turbulenceScaleSlider');
+        const turbulenceScaleValue = document.getElementById('turbulenceScaleValue');
+        turbulenceScaleSlider.value = this.options.turbulenceScale;
+        turbulenceScaleValue.textContent = this.options.turbulenceScale.toFixed(2);
+
+        turbulenceScaleSlider.addEventListener('input', (e) => {
+            const scale = parseFloat(e.target.value);
+            this.options.turbulenceScale = scale;
+            turbulenceScaleValue.textContent = scale.toFixed(2);
+
+            //update particles turbulence
+            for (let p of this.particles) {
+                p.options.turbulenceScale = this.options.turbulenceScale;
+            }
+        });
     }
 
     resize() {
@@ -788,8 +903,8 @@ class ParticleSystem {
     update(timestamp) {
         if (!this.isRunning) return;
 
-        const deltaTime = timestamp - this.lastTime
-		        this.lastTime = timestamp;
+        const deltaTime = timestamp - this.lastTime;
+        this.lastTime = timestamp;
 
         this.updateFPS(timestamp);
 
