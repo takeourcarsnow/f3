@@ -19,12 +19,12 @@
         <div class="main-controls">
             <div class="sliders">
                 <div class="slider-container">
-                    <label for="particleSlider">Particles: <span id="particleValue">100</span></label>
+                    <label for="particleSlider">Particles: <span id="particleValue">191</span></label>
                     <input type="range" id="particleSlider" min="0" max="100" value="50">
                 </div>
                 <div class="slider-container">
-                    <label for="sizeSlider">Size: <span id="sizeValue">4-32</span></label>
-                    <input type="range" id="sizeSlider" min="4" max="128" value="32">
+                    <label for="sizeSlider">Size: <span id="sizeValue">2-12</span></label>
+                    <input type="range" id="sizeSlider" min="0" max="100" value="32">
                 </div>
                 <div class="slider-container">
                     <label for="speedSlider">Speed: <span id="speedValue">0.5</span></label>
@@ -34,18 +34,12 @@
                     <label for="gravitySlider">Gravity: <span id="gravityValue">0.0</span></label>
                     <input type="range" id="gravitySlider" min="-2" max="2" step="0.1" value="0">
                 </div>
-                <div class="slider-container">
-                    <label for="windSlider">Wind: <span id="windValue">0.0</span></label>
-                    <input type="range" id="windSlider" min="-2" max="2" step="0.1" value="0">
-                </div>
+
             </div>
             <div class="options">
                 <div class="control-group">
-                    <label for="sizeMode">Size Mode:</label>
-                    <select id="sizeMode" class="select-style">
-                        <option value="uniform">Uniform</option>
-                        <option value="random">Random</option>
-                    </select>
+                    <label for="sizeMode">Uniform Size:</label>
+                    <input type="checkbox" id="sizeMode" checked>
                 </div>
                 <div class="control-group">
                     <label for="particleType">Particle Type:</label>
@@ -77,6 +71,7 @@
                         <option value="vortex">Vortex</option>
                         <option value="attract">Attract</option>
                         <option value="repel">Repel</option>
+
                     </select>
                 </div>
                 <div class="control-group">
@@ -86,15 +81,14 @@
             </div>
         </div>
         <div class="buttons">
+			<button id="modeBtn" class="btn">Change Mode (M)</button>
             <button id="resetBtn" class="btn">Reset (R)</button>
-            <button id="explodeBtn" class="btn">Explode (E)</button>
-            <button id="modeBtn" class="btn">Cycle Mode (M)</button>
         </div>
     </div>
     <button id="toggleUI" class="toggle-ui">UI</button>
 
     <div class="keyboard-shortcuts">
-        Shortcuts: H - Toggle UI, Space - Pause/Play, R - Reset, E - Explode, M - Cycle Mode
+        Shortcuts: H - Toggle UI, Space - Pause/Play, R - Reset, E - Explode, M - Change Mode
     </div>
 
     <script src="simulation.js"></script>

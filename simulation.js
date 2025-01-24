@@ -148,30 +148,7 @@ class Particle {
                 }
                 break;
 
-            case 'fluid':
-            case 'springs':
-                {
-                    const isSprings = options.mode === 'springs';
-                    const forceMultiplier = isSprings ? 0.03 : 0.2; // Different multipliers
-                    const targetDistance = isSprings ? 25 : 0;
-
-                    for (let other of nearbyParticles) {
-                        if (other === this) continue;
-                        const dx = other.x - this.x;
-                        const dy = other.y - this.y;
-                        const distSq = dx * dx + dy * dy;
-                        if (distSq < 2500 && distSq > 0) {
-                            const dist = Math.sqrt(distSq);
-                            const force = (dist - targetDistance) * forceMultiplier * options.speedMultiplier;
-                            const invDist = 1 / dist;
-                            this.velocityX += dx * invDist * force;
-                            this.velocityY += dy * invDist * force;
-                        }
-                    }
-                }
-                break;
-
-            default:
+            default: // mode: 'normal'
                 this.velocityX += gravityX * 30 * dt * options.speedMultiplier;
                 this.velocityY += gravityY * 30 * dt * options.speedMultiplier;
         }
@@ -359,13 +336,13 @@ class ParticleSystem {
 
         // Default options
         this.options = {
-            particleCount: 191, // Changed default particle count
+            particleCount: 191,
             colorMode: 'kinetic',
             singleColor: '#00ff88',
             particleType: 'circle',
             physicsMode: 'normal',
-            sizeMode: 'uniform',
-            sizeRange: [12, 12], // Changed default size to 12
+            sizeMode: 'uniform', // Default to uniform size
+            sizeRange: [12, 12],
             speedMultiplier: 0.5,
             gravity: 0,
             windForce: 0,
@@ -671,19 +648,14 @@ class ParticleSystem {
 
             // Update size in existing particles
             for (let p of this.particles) {
-                if (this.options.sizeMode === 'random') {
-                    p.options.size = utils.randomRange(...this.options.sizeRange);
-                } else {
-                    p.options.size = size;
-                }
+                p.options.size = this.options.sizeMode === 'random' ? utils.randomRange(...this.options.sizeRange) : size;
             }
 
             this.createParticles();
         };
 
         // Set initial size to 12 (for the UI display)
-		
-		        sizeSlider.value = ((Math.log(12) - logMinSize) / (logMaxSize - logMinSize)) * 100;
+        sizeSlider.value = ((Math.log(12) - logMinSize) / (logMaxSize - logMinSize)) * 100;
         updateSize(sizeSlider.value);
 
         // Handle slider input
@@ -691,17 +663,20 @@ class ParticleSystem {
             updateSize(sizeSlider.value);
         });
 
-        // Size Mode
-        document.getElementById('sizeMode')?.addEventListener('change', (e) => {
-            this.options.sizeMode = e.target.value;
+        // Size Mode Checkbox
+        const sizeModeCheckbox = document.getElementById('sizeMode');
+        sizeModeCheckbox.checked = this.options.sizeMode === 'uniform'; // Set initial state
 
-            // Update size in existing particles based on new mode
+        sizeModeCheckbox.addEventListener('change', (e) => {
+            this.options.sizeMode = e.target.checked ? 'uniform' : 'random';
+
+            // Correctly update size in existing particles based on new mode
+            const { sizeRange } = this.options;
             for (let p of this.particles) {
-                if (this.options.sizeMode === 'random') {
-                    p.options.size = utils.randomRange(...this.options.sizeRange);
-                } else {
-                    p.options.size = this.options.sizeRange[1]; // Max size for uniform
-                }
+              p.options.size =
+                this.options.sizeMode === 'random'
+                  ? utils.randomRange(...sizeRange)
+                  : sizeRange[1]; // Max size for uniform
             }
 
             this.createParticles();
@@ -762,7 +737,16 @@ class ParticleSystem {
             }
         });
 
-        document.getElementById('physicsMode')?.addEventListener('change', (e) => {
+        // Physics Mode (removed fluid and spring modes)
+        const physicsModeSelect = document.getElementById('physicsMode');
+        physicsModeSelect.innerHTML = `
+            <option value="normal">Normal</option>
+            <option value="vortex">Vortex</option>
+            <option value="attract">Attract</option>
+            <option value="repel">Repel</option>
+        `;
+
+        physicsModeSelect.addEventListener('change', (e) => {
             this.options.physicsMode = e.target.value;
             document.getElementById('currentMode').textContent = e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1);
             // Update mode in particle options directly
@@ -774,9 +758,8 @@ class ParticleSystem {
         document.getElementById('resetBtn')?.addEventListener('click', () => this.reset());
         document.getElementById('explodeBtn')?.addEventListener('click', () => this.explodeAtPoint(this.mouseX, this.mouseY));
         document.getElementById('modeBtn')?.addEventListener('click', () => {
-            const physicsMode = document.getElementById('physicsMode');
-            physicsMode.selectedIndex = (physicsMode.selectedIndex + 1) % physicsMode.options.length;
-            physicsMode.dispatchEvent(new Event('change'));
+            physicsModeSelect.selectedIndex = (physicsModeSelect.selectedIndex + 1) % physicsModeSelect.options.length;
+            physicsModeSelect.dispatchEvent(new Event('change'));
         });
         document.getElementById('toggleUI')?.addEventListener('click', () => this.toggleUI());
     }
@@ -805,8 +788,8 @@ class ParticleSystem {
     update(timestamp) {
         if (!this.isRunning) return;
 
-        const deltaTime = timestamp - this.lastTime;
-        this.lastTime = timestamp;
+        const deltaTime = timestamp - this.lastTime
+		        this.lastTime = timestamp;
 
         this.updateFPS(timestamp);
 

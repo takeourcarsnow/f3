@@ -43,7 +43,7 @@ canvas {
     transform: translateX(-50%);
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 20px;
     z-index: 100;
     background: var(--ui-background);
     padding: 15px;
@@ -54,24 +54,28 @@ canvas {
 .main-controls {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 20px;
     width: 100%;
 }
 
 .buttons {
     display: flex;
+    flex-direction: column;
     gap: 10px;
+    width: 100%;
 }
 
 .btn {
-    flex: 1;
-    padding: 8px;
+    flex: none;
+    width: 100%;
+    padding: 10px 15px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid var(--primary-color);
     color: var(--primary-color);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
+    font-size: 1rem;
 }
 
 .btn:hover {
@@ -118,9 +122,22 @@ input[type="range"]::-webkit-slider-thumb {
 
 .options {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
     gap: 10px;
     width: 100%;
+}
+
+.options .control-group:first-of-type {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.options .control-group:first-of-type label {
+    margin-right: 10px;
 }
 
 .select-style {
@@ -215,8 +232,17 @@ input[type="range"]::-webkit-slider-thumb {
 
 @media (max-width: 768px) {
     .controls {
-        padding: 12px;
-        gap: 12px;
+        padding: 10px;
+        gap: 15px;
+    }
+
+    .buttons {
+        gap: 8px;
+    }
+
+    .btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
     }
 
     .keyboard-shortcuts {
